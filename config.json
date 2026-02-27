@@ -1,0 +1,23 @@
+{
+  "dayY": -270,
+  "dateY": -170,
+  "timeY": -80,
+  "daySize": 90,
+  "dateSize": 40,
+  "timeSize": 50,
+  "daySpacing": "",
+  "dateSpacing": "",
+  "timeSpacing": "",
+  "fontColor": "gray",
+  "shadowBlur": 40,
+  "shadowColor": "black",
+  "dayFont": "Anurati",
+  "dateFont": "Rajdhani",
+  "timeFont": "Rajdhani",
+  "timePrefix": "- ",
+  "timeSuffix": " -",
+  "hour12": true,
+  "interval": 60,
+  "canvasWidth": 1920,
+  "canvasHeight": 1200
+}

@@ -1,0 +1,23 @@
+# JetBrains files
+/shelf/
+/workspace.xml
+
+# Queries
+/queries/
+
+# Datasource
+/dataSources/
+/dataSources.local.xml
+
+# HTTP client
+/httpRequests/
+
+# Node
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment
+.env

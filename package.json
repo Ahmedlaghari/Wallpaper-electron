@@ -1,20 +1,45 @@
 {
   "name": "time-wallpaper",
   "version": "1.0.0",
-  "description": "",
+  "description": "Time Wallpaper App",
+  "author": "Your Name",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "build": {
+    "appId": "com.yourname.timewallpaper",
+    "productName": "Time Wallpaper",
+    "npmRebuild": true,
+    "nodeGypRebuild": false,
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.cache"
+    ],
+    "extraResources": [
+      "fonts/",
+      "config.json",
+      "icon.png"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "node_modules/canvas/**",
+      "node_modules/bindings/**",
+      "node_modules/@napi-rs/**"
+    ]
+  },
   "devDependencies": {
-    "electron": "^40.6.0"
+    "@electron/rebuild": "^4.0.3",
+    "electron": "^40.6.1"
   },
   "dependencies": {
     "canvas": "^3.2.1",
+    "sharp": "^0.34.5",
     "wallpaper": "^7.2.1"
   }
 }

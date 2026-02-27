@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallpaper Settings</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #111118;
+            --border: #1e1e2e;
+            --accent: #7c6aff;
+            --accent2: #ff6a9b;
+            --text: #e8e8f0;
+            --muted: #555570;
+            --input-bg: #16161f;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--surface);
+        }
+
+        .header-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 12px var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .header h1 {
+            font-family: 'Space Mono', monospace;
+            font-size: 13px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text);
+        }
+
+        .header span {
+            margin-left: auto;
+            font-size: 11px;
+            color: var(--muted);
+            font-family: 'Space Mono', monospace;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            padding: 0 24px;
+        }
+
+        .tab {
+            padding: 10px 16px;
+            font-size: 12px;
+            font-family: 'Space Mono', monospace;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .tab:hover { color: var(--text); }
+
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* Scrollable content */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Section */
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* Row */
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .row.single { grid-template-columns: 1fr; }
+        .row.triple { grid-template-columns: 1fr 1fr 1fr; }
+
+        /* Field */
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .field label {
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: 0.5px;
+        }
+
+        .field input[type="text"],
+        .field input[type="number"],
+        .field select {
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            padding: 8px 10px;
+            outline: none;
+            transition: border-color 0.2s;
+            width: 100%;
+        }
+
+        .field input:focus,
+        .field select:focus {
+            border-color: var(--accent);
+        }
+
+        /* Color field */
+        .color-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            transition: border-color 0.2s;
+        }
+
+        .color-row:focus-within { border-color: var(--accent); }
+
+        .color-row input[type="color"] {
+            width: 22px;
+            height: 22px;
+            border: none;
+            border-radius: 4px;
+            background: none;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .color-row input[type="text"] {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            outline: none;
+            flex: 1;
+            padding: 0;
+        }
+
+        /* Toggle */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+        }
+
+        .toggle-row span {
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .toggle {
+            position: relative;
+            width: 36px;
+            height: 20px;
+        }
+
+        .toggle input { opacity: 0; width: 0; height: 0; }
+
+        .toggle-slider {
+            position: absolute;
+            inset: 0;
+            background: var(--border);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .toggle-slider:before {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            left: 3px;
+            top: 3px;
+            background: var(--muted);
+            border-radius: 50%;
+            transition: 0.2s;
+        }
+
+        .toggle input:checked + .toggle-slider { background: var(--accent); }
+        .toggle input:checked + .toggle-slider:before {
+            transform: translateX(16px);
+            background: white;
+        }
+
+        /* Preview strip */
+        .preview {
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .preview::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, transparent 70%);
+        }
+
+        .preview-day {
+            font-size: 28px;
+            letter-spacing: 6px;
+            color: white;
+            text-shadow: 0 0 20px rgba(124,106,255,0.5);
+            position: relative;
+            font-weight: bold;
+        }
+
+        .preview-date {
+            font-size: 13px;
+            color: rgba(255,255,255,0.8);
+            margin-top: 6px;
+            position: relative;
+        }
+
+        .preview-time {
+            font-size: 18px;
+            color: rgba(255,255,255,0.9);
+            margin-top: 4px;
+            position: relative;
+        }
+
+        /* Footer */
+        .footer {
+            padding: 14px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            background: var(--surface);
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-save {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-save:hover { background: #9b8dff; }
+
+        .btn-reload {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .btn-reload:hover { background: #2a2a3e; }
+
+        .btn-cancel {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid var(--border);
+            flex: 0.5;
+        }
+
+        .btn-cancel:hover { color: var(--text); }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--accent);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-family: 'Space Mono', monospace;
+            opacity: 0;
+            transition: all 0.3s;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        select option { background: var(--input-bg); }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-dot"></div>
+    <h1>Wallpaper Settings</h1>
+    <span id="clock">--:--</span>
+</div>
+
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('typography')">Typography</div>
+    <div class="tab" onclick="switchTab('layout')">Layout</div>
+    <div class="tab" onclick="switchTab('style')">Style</div>
+    <div class="tab" onclick="switchTab('preview')">Preview</div>
+</div>
+
+<div class="content">
+
+    <!-- TYPOGRAPHY TAB -->
+    <div class="tab-panel active" id="tab-typography">
+
+        <div class="section">
+            <div class="section-label">Day</div>
+            <div class="row">
+                <div class="field">
+                    <label>Font Family</label>
+                    <input type="text" id="dayFont" placeholder="Anurati">
+                </div>
+                <div class="field">
+                    <label>Font Size (px)</label>
+                    <input type="number" id="daySize" placeholder="110">
+                </div>
+            </div>
+            <div class="row single">
+                <div class="field">
+                    <label>Letter Spacing (spaces between letters)</label>
+                    <input type="text" id="daySpacing" placeholder=" ">
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Date</div>
+            <div class="row">
+                <div class="field">
+                    <label>Font Family</label>
+                    <input type="text" id="dateFont" placeholder="Poppins">
+                </div>
+                <div class="field">
+                    <label>Font Size (px)</label>
+                    <input type="number" id="dateSize" placeholder="45">
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Time</div>
+            <div class="row">
+                <div class="field">
+                    <label>Font Family</label>
+                    <input type="text" id="timeFont" placeholder="Poppins">
+                </div>
+                <div class="field">
+                    <label>Font Size (px)</label>
+                    <input type="number" id="timeSize" placeholder="50">
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label>Prefix</label>
+                    <input type="text" id="timePrefix" placeholder="- ">
+                </div>
+                <div class="field">
+                    <label>Suffix</label>
+                    <input type="text" id="timeSuffix" placeholder=" -">
+                </div>
+            </div>
+            <div class="toggle-row" style="margin-top:6px">
+                <span>12-hour format</span>
+                <label class="toggle">
+                    <input type="checkbox" id="hour12">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- LAYOUT TAB -->
+    <div class="tab-panel" id="tab-layout">
+
+        <div class="section">
+            <div class="section-label">Vertical Position (negative = up)</div>
+            <div class="row triple">
+                <div class="field">
+                    <label>Day Y</label>
+                    <input type="number" id="dayY" placeholder="-270">
+                </div>
+                <div class="field">
+                    <label>Date Y</label>
+                    <input type="number" id="dateY" placeholder="-170">
+                </div>
+                <div class="field">
+                    <label>Time Y</label>
+                    <input type="number" id="timeY" placeholder="-80">
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Canvas Size</div>
+            <div class="row">
+                <div class="field">
+                    <label>Width (px)</label>
+                    <input type="number" id="canvasWidth" placeholder="1920">
+                </div>
+                <div class="field">
+                    <label>Height (px)</label>
+                    <input type="number" id="canvasHeight" placeholder="1200">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- STYLE TAB -->
+    <div class="tab-panel" id="tab-style">
+
+        <div class="section">
+            <div class="section-label">Colors</div>
+            <div class="row">
+                <div class="field">
+                    <label>Font Color</label>
+                    <div class="color-row">
+                        <input type="color" id="fontColorPicker" value="#ffffff">
+                        <input type="text" id="fontColor" placeholder="#ffffff">
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Shadow Color</label>
+                    <div class="color-row">
+                        <input type="color" id="shadowColorPicker" value="#000000">
+                        <input type="text" id="shadowColor" placeholder="#000000">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Shadow</div>
+            <div class="row single">
+                <div class="field">
+                    <label>Shadow Blur (px)</label>
+                    <input type="number" id="shadowBlur" placeholder="40">
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Update Interval</div>
+            <div class="row single">
+                <div class="field">
+                    <label>Refresh every (seconds)</label>
+                    <input type="number" id="interval" placeholder="60">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- PREVIEW TAB -->
+    <div class="tab-panel" id="tab-preview">
+        <div class="section">
+            <div class="section-label">Live Preview</div>
+            <div class="preview">
+                <div class="preview-day" id="prev-day">MONDAY</div>
+                <div class="preview-date" id="prev-date">February 27, 2026</div>
+                <div class="preview-time" id="prev-time">- 11:47 PM -</div>
+            </div>
+            <p style="font-size:11px; color: var(--muted); text-align:center">
+                Preview is approximate — actual wallpaper may vary slightly by font.
+            </p>
+        </div>
+    </div>
+
+</div>
+
+<div class="footer">
+    <button class="btn btn-cancel" onclick="window.close()">Close</button>
+    <button class="btn btn-reload" onclick="reloadWallpaper()">Reload Wallpaper</button>
+    <button class="btn btn-save" onclick="save()">Save Settings</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const fs = require("fs");
+    const path = require("path");
+    const { ipcRenderer } = require("electron");
+
+    const configPath = path.join(__dirname, "config.json");
+    let config = {};
+
+    // Load config
+    function loadConfig() {
+        try {
+            config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        } catch(e) {
+            config = {};
+        }
+
+        document.getElementById("dayFont").value = config.dayFont || "Anurati";
+        document.getElementById("daySize").value = config.daySize || 110;
+        document.getElementById("daySpacing").value = config.daySpacing ?? " ";
+        document.getElementById("dayY").value = config.dayY ?? -270;
+
+        document.getElementById("dateFont").value = config.dateFont || "Poppins";
+        document.getElementById("dateSize").value = config.dateSize || 45;
+        document.getElementById("dateY").value = config.dateY ?? -170;
+
+        document.getElementById("timeFont").value = config.timeFont || "Poppins";
+        document.getElementById("timeSize").value = config.timeSize || 50;
+        document.getElementById("timeY").value = config.timeY ?? -80;
+        document.getElementById("timePrefix").value = config.timePrefix ?? "- ";
+        document.getElementById("timeSuffix").value = config.timeSuffix ?? " -";
+        document.getElementById("hour12").checked = config.hour12 !== false;
+
+        document.getElementById("fontColor").value = config.fontColor || "white";
+        document.getElementById("fontColorPicker").value = toHex(config.fontColor || "#ffffff");
+        document.getElementById("shadowColor").value = config.shadowColor || "black";
+        document.getElementById("shadowColorPicker").value = toHex(config.shadowColor || "#000000");
+        document.getElementById("shadowBlur").value = config.shadowBlur ?? 40;
+        document.getElementById("interval").value = config.interval ?? 60;
+
+        document.getElementById("canvasWidth").value = config.canvasWidth || 1920;
+        document.getElementById("canvasHeight").value = config.canvasHeight || 1200;
+
+        updatePreview();
+    }
+
+    function toHex(color) {
+        if (color.startsWith("#")) return color;
+        if (color === "white") return "#ffffff";
+        if (color === "black") return "#000000";
+        return "#ffffff";
+    }
+
+    // Color pickers sync
+    document.getElementById("fontColorPicker").addEventListener("input", (e) => {
+        document.getElementById("fontColor").value = e.target.value;
+    });
+    document.getElementById("shadowColorPicker").addEventListener("input", (e) => {
+        document.getElementById("shadowColor").value = e.target.value;
+    });
+    document.getElementById("fontColor").addEventListener("input", (e) => {
+        if (e.target.value.startsWith("#")) document.getElementById("fontColorPicker").value = e.target.value;
+    });
+
+    // Save
+    function save() {
+        config.dayFont = document.getElementById("dayFont").value;
+        config.daySize = parseInt(document.getElementById("daySize").value);
+        config.daySpacing = document.getElementById("daySpacing").value;
+        config.dayY = parseInt(document.getElementById("dayY").value);
+
+        config.dateFont = document.getElementById("dateFont").value;
+        config.dateSize = parseInt(document.getElementById("dateSize").value);
+        config.dateY = parseInt(document.getElementById("dateY").value);
+
+        config.timeFont = document.getElementById("timeFont").value;
+        config.timeSize = parseInt(document.getElementById("timeSize").value);
+        config.timeY = parseInt(document.getElementById("timeY").value);
+        config.timePrefix = document.getElementById("timePrefix").value;
+        config.timeSuffix = document.getElementById("timeSuffix").value;
+        config.hour12 = document.getElementById("hour12").checked;
+
+        config.fontColor = document.getElementById("fontColor").value;
+        config.shadowColor = document.getElementById("shadowColor").value;
+        config.shadowBlur = parseInt(document.getElementById("shadowBlur").value);
+        config.interval = parseInt(document.getElementById("interval").value);
+
+        config.canvasWidth = parseInt(document.getElementById("canvasWidth").value);
+        config.canvasHeight = parseInt(document.getElementById("canvasHeight").value);
+
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        showToast("Settings saved!");
+        updatePreview();
+    }
+
+    function reloadWallpaper() {
+        save();
+        ipcRenderer.send("reload-wallpaper");
+        showToast("Reloading wallpaper...");
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 2500);
+    }
+
+    function switchTab(name) {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+        event.target.classList.add("active");
+        document.getElementById("tab-" + name).classList.add("active");
+        if (name === "preview") updatePreview();
+    }
+
+    function updatePreview() {
+        const now = new Date();
+        const day = now.toLocaleDateString("en-US", { weekday: "long" });
+        const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        const time = now.toLocaleTimeString("en-US", {
+            hour: "2-digit", minute: "2-digit",
+            hour12: document.getElementById("hour12").checked
+        });
+        const spacing = document.getElementById("daySpacing").value;
+        const prefix = document.getElementById("timePrefix").value;
+        const suffix = document.getElementById("timeSuffix").value;
+        const color = document.getElementById("fontColor").value;
+
+        document.getElementById("prev-day").textContent = day.toUpperCase().split("").join(spacing);
+        document.getElementById("prev-day").style.color = color;
+        document.getElementById("prev-date").textContent = date;
+        document.getElementById("prev-date").style.color = color;
+        document.getElementById("prev-time").textContent = prefix + time + suffix;
+        document.getElementById("prev-time").style.color = color;
+    }
+
+    // Clock in header
+    function updateClock() {
+        const now = new Date();
+        document.getElementById("clock").textContent = now.toLocaleTimeString("en-US", {
+            hour: "2-digit", minute: "2-digit", hour12: true
+        });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    loadConfig();
+</script>
+</body>
+</html>
