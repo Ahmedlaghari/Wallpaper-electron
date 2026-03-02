@@ -577,17 +577,21 @@
     const fs = require("fs");
     const path = require("path");
     const { ipcRenderer } = require("electron");
-
-    const configPath = path.join(__dirname, "config.json");
-    let config = {};
-
     // Load config
-    function loadConfig() {
+
+    let config = {};
+    let configPath;
+    async function loadConfig() {
+        const userDataPath = await ipcRenderer.invoke("get-user-data-path");
+        configPath = path.join(userDataPath, "config.json");
+
         try {
             config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-        } catch(e) {
+        } catch (e) {
             config = {};
         }
+
+
 
         document.getElementById("dayFont").value = config.dayFont || "Anurati";
         document.getElementById("daySize").value = config.daySize || 110;
@@ -615,8 +619,8 @@
         document.getElementById("canvasWidth").value = config.canvasWidth || 1920;
         document.getElementById("canvasHeight").value = config.canvasHeight || 1200;
 
-        updatePreview();
-    }
+        updatePreview();}
+
 
     function toHex(color) {
         if (color.startsWith("#")) return color;
@@ -701,7 +705,7 @@
         const suffix = document.getElementById("timeSuffix").value;
         const color = document.getElementById("fontColor").value;
 
-        document.getElementById("prev-day").textContent = day.toUpperCase().split("").join(spacing);
+        document.getElementById("prev-day").textContent = day.toUpperCase();
         document.getElementById("prev-day").style.color = color;
         document.getElementById("prev-date").textContent = date;
         document.getElementById("prev-date").style.color = color;

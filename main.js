@@ -3,19 +3,21 @@ const fs = require("fs");
 const path = require("path");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 
-registerFont(path.join(__dirname, "fonts/Anurati-Regular.otf"), { family: "Anurati" });
-registerFont(path.join(__dirname, "fonts/Rajdhani-Bold.ttf"), { family: "Rajdhani" });
+const fontsDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'fonts')
+    : path.join(__dirname, 'fonts');
+
+registerFont(path.join(fontsDir, 'Anurati-Regular.otf'), { family: 'Anurati' });
+registerFont(path.join(fontsDir, 'Rajdhani-Bold.ttf'), { family: 'Rajdhani' });
 
 const bgPathFile = path.join(app.getPath("userData"), "bgpath.txt");
-const configPath = path.join(__dirname, "config.json");
+const configPath = path.join(app.getPath("userData"), "config.json");
 
 ipcMain.on("reload-wallpaper", async () => {
     await generateWallpaper();
 });
 
 async function getImage() {
-    if (fs.existsSync(bgPathFile)) return;
-
     const { dialog } = require("electron");
     const result = await dialog.showOpenDialog({
         filters: [{ name: "Images", extensions: ["jpg", "png"] }]
@@ -23,6 +25,38 @@ async function getImage() {
 
     if (!result.canceled && result.filePaths.length > 0) {
         fs.writeFileSync(bgPathFile, result.filePaths[0]);
+    }
+}
+function ensureConfigExists() {
+    const configPath = path.join(app.getPath("userData"), "config.json");
+
+    if (!fs.existsSync(configPath)) {
+        const defaultConfig = {
+            dayFont: "Anurati",
+            daySize: 110,
+            daySpacing: 10,
+            dayY: -270,
+
+            dateFont: "Rajdhani",
+            dateSize: 45,
+            dateY: -170,
+
+            timeFont: "Rajdhani",
+            timeSize: 50,
+            timeY: -80,
+            timePrefix: "- ",
+            timeSuffix: " -",
+            hour12: true,
+
+            fontColor: "white",
+            shadowColor: "black",
+            shadowBlur: 40,
+
+            canvasWidth: 1920,
+            canvasHeight: 1200
+        };
+
+        fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
     }
 }
 
@@ -36,7 +70,23 @@ async function generateWallpaper() {
     }
 
     const bgImage = await loadImage(selectedImagePath);
-    const wallpaper = await import("wallpaper");
+    const { execSync } = require("child_process");
+
+    function setWallpaper(imagePath) {
+        const escaped = imagePath.replace(/'/g, "''");
+        const script = `Add-Type -TypeDefinition @'
+using System.Runtime.InteropServices;
+public class Wallpaper {
+    [DllImport("user32.dll")]
+    public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+}
+'@
+[Wallpaper]::SystemParametersInfo(20, 0, '${escaped}', 3)`;
+
+        const scriptPath = path.join(app.getPath("temp"), "set-wallpaper.ps1");
+        fs.writeFileSync(scriptPath, script, "utf-8");
+        execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`);
+    }
 
     const width = config.canvasWidth || 1920;
     const height = config.canvasHeight || 1200;
@@ -53,14 +103,39 @@ async function generateWallpaper() {
         hour: "2-digit", minute: "2-digit", hour12: config.hour12 !== false
     });
 
-    ctx.fillStyle = config.fontColor || "white";
-    ctx.textAlign = "center";
+    ctx.fillStyle = config.fontColor || "white"
+
     ctx.shadowBlur = config.shadowBlur || 40;
     ctx.shadowColor = config.shadowColor || "black";
-
     ctx.font = `${config.daySize || 110}px ${config.dayFont || "Anurati"}`;
-    const spacedDay = day.toUpperCase().split("").join(config.daySpacing || " ");
-    ctx.fillText(spacedDay, width / 2, height / 2 + (config.dayY || -270));
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
+    const text = day.toUpperCase();
+    const letterSpacing = config.daySpacing ?? 10; // spacing in pixels
+
+
+
+// Start drawing from left so text stays centered
+// Measure total width with same rounding as render loop
+    let totalWidth = 0;
+    for (let i = 0; i < text.length; i++) {
+        totalWidth += ctx.measureText(text[i]).width;
+    }
+    totalWidth += letterSpacing * (text.length - 1);
+
+    let x = Math.round((width / 2) - (totalWidth / 2));
+    let increment = Math.round(totalWidth/text.length)// no rounding here
+    const y = height / 2 + (config.dayY || -270);
+
+    for (let i = 0; i < text.length; i++) {
+        ctx.fillText(text[i], Math.round(x), y);  // round only at draw time
+        x += increment;
+    }
+    // ctx.font = `${config.daySize || 110}px ${config.dayFont || "Anurati"}`;
+    // const spacedDay = day.toUpperCase().split("").join(config.daySpacing || " ");
+    // ctx.fillText(spacedDay, width / 2, height / 2 + (config.dayY || -270));
+    ctx.textAlign = "center";
 
     ctx.font = `${config.dateSize || 45}px ${config.dateFont || "Rajdhani"}`;
     ctx.fillText(date, width / 2, height / 2 + (config.dateY || -170));
@@ -72,7 +147,7 @@ async function generateWallpaper() {
     const filePath = path.join(app.getPath("userData"), "wallpaper.png");
     fs.writeFileSync(filePath, buffer);
 
-    await wallpaper.setWallpaper(filePath);
+    setWallpaper(filePath);
 }
 
 function scheduleNextUpdate() {
@@ -104,11 +179,12 @@ function openSettings() {
 let tray = null;
 
 app.whenReady().then(async () => {
+    ensureConfigExists();
     tray = new Tray(path.join(__dirname, "icon.png"));
 
     const contextMenu = Menu.buildFromTemplate([
         { label: "Change Background", click: async () => {
-                fs.unlinkSync(bgPathFile);
+
                 await getImage();
                 await generateWallpaper();
             }},
@@ -121,8 +197,14 @@ app.whenReady().then(async () => {
 
     tray.setToolTip("Time Wallpaper");
     tray.setContextMenu(contextMenu);
+    ipcMain.handle("get-user-data-path", () => {
+        return app.getPath("userData");
+    });
 
-    await getImage();
+
     await generateWallpaper();
     scheduleNextUpdate();
+    app.on("window-all-closed", (e) => {
+        e.preventDefault();
+    });
 });

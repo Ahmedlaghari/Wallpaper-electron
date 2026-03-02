@@ -19,23 +19,25 @@
     },
     "files": [
       "**/*",
-      "!node_modules/.cache"
-    ],
-    "extraResources": [
-      "fonts/",
+      "!node_modules/.cache",
       "config.json",
       "icon.png"
     ],
     "asarUnpack": [
       "**/*.node",
       "node_modules/canvas/**",
+      "node_modules/wallpaper/**",
       "node_modules/bindings/**",
-      "node_modules/@napi-rs/**"
+      "node_modules/@napi-rs/**",
+      "config.json",
+      "icon.png",
+      "fonts/*"
     ]
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
-    "electron": "^40.6.1"
+    "electron": "^40.6.1",
+    "electron-builder": "^26.8.1"
   },
   "dependencies": {
     "canvas": "^3.2.1",
