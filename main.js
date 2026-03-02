@@ -3,13 +3,6 @@ const fs = require("fs");
 const path = require("path");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 
-const fontsDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'fonts')
-    : path.join(__dirname, 'fonts');
-
-registerFont(path.join(fontsDir, 'Anurati-Regular.otf'), { family: 'Anurati' });
-registerFont(path.join(fontsDir, 'Rajdhani-Bold.ttf'), { family: 'Rajdhani' });
-
 const bgPathFile = path.join(app.getPath("userData"), "bgpath.txt");
 const configPath = path.join(app.getPath("userData"), "config.json");
 
@@ -179,8 +172,25 @@ function openSettings() {
 let tray = null;
 
 app.whenReady().then(async () => {
+    // Register fonts FIRST, before anything else
+    const fontsDir = app.isPackaged
+        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'fonts')
+        : path.join(__dirname, 'fonts');
+
+    registerFont(path.join(fontsDir, 'Anurati-Regular.otf'), { family: 'Anurati' });
+    registerFont(path.join(fontsDir, 'Rajdhani-Bold.ttf'), { family: 'Rajdhani' });
+    registerFont(path.join(fontsDir, 'poppins.semibold.ttf'), { family: 'Poppins' });
     ensureConfigExists();
     tray = new Tray(path.join(__dirname, "icon.png"));
+    const anuratiPath = path.join(fontsDir, 'anurati.ttf');
+    const rajdhaniPath = path.join(fontsDir, 'Rajdhani-Bold.ttf');
+
+    console.log('Fonts dir:', fontsDir);
+    console.log('Anurati exists:', fs.existsSync(anuratiPath));
+    console.log('Rajdhani exists:', fs.existsSync(rajdhaniPath));
+
+    registerFont(anuratiPath, { family: 'Anurati' });
+    registerFont(rajdhaniPath, { family: 'Rajdhani' });
 
     const contextMenu = Menu.buildFromTemplate([
         { label: "Change Background", click: async () => {
