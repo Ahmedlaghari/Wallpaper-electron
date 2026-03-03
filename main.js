@@ -177,19 +177,19 @@ app.whenReady().then(async () => {
         ? path.join(process.resourcesPath, 'app.asar.unpacked', 'fonts')
         : path.join(__dirname, 'fonts');
 
-    registerFont(path.join(fontsDir, 'Anurati-Regular.otf'), { family: 'Anurati' });
-    registerFont(path.join(fontsDir, 'Rajdhani-Bold.ttf'), { family: 'Rajdhani' });
     registerFont(path.join(fontsDir, 'poppins.semibold.ttf'), { family: 'Poppins' });
     ensureConfigExists();
     tray = new Tray(path.join(__dirname, "icon.png"));
     const anuratiPath = path.join(fontsDir, 'anurati.ttf');
     const rajdhaniPath = path.join(fontsDir, 'Rajdhani-Bold.ttf');
+    const poppinsPath = path.join(fontsDir, 'poppins.semibold.ttf');
 
     console.log('Fonts dir:', fontsDir);
     console.log('Anurati exists:', fs.existsSync(anuratiPath));
     console.log('Rajdhani exists:', fs.existsSync(rajdhaniPath));
-
+    console.log('Poppins exists:', fs.existsSync(poppinsPath));
     registerFont(anuratiPath, { family: 'Anurati' });
+    registerFont(path.join(fontsDir, 'poppins.semibold.ttf'), { family: 'Poppins' });
     registerFont(rajdhaniPath, { family: 'Rajdhani' });
 
     const contextMenu = Menu.buildFromTemplate([
