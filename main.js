@@ -117,14 +117,16 @@ public class Wallpaper {
     }
     totalWidth += letterSpacing * (text.length - 1);
 
+
     let x = Math.round((width / 2) - (totalWidth / 2));
     let increment = Math.round(totalWidth/text.length)// no rounding here
     const y = height / 2 + (config.dayY || -270);
 
     for (let i = 0; i < text.length; i++) {
-        ctx.fillText(text[i], Math.round(x), y);  // round only at draw time
-        x += increment;
-    }
+        ctx.fillText(text[i], x, y);
+        console.log(x);// round only at draw time
+        x += Number(ctx.measureText(text[i]).width+Number(letterSpacing)) ;}
+
     // ctx.font = `${config.daySize || 110}px ${config.dayFont || "Anurati"}`;
     // const spacedDay = day.toUpperCase().split("").join(config.daySpacing || " ");
     // ctx.fillText(spacedDay, width / 2, height / 2 + (config.dayY || -270));
