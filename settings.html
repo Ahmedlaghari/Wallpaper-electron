@@ -6,11 +6,7 @@
     <title>Wallpaper Settings</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
             --bg: #0a0a0f;
@@ -34,7 +30,6 @@
             flex-direction: column;
         }
 
-        /* Header */
         .header {
             padding: 20px 24px 16px;
             border-bottom: 1px solid var(--border);
@@ -45,8 +40,7 @@
         }
 
         .header-dot {
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background: var(--accent);
             box-shadow: 0 0 12px var(--accent);
@@ -73,7 +67,6 @@
             font-family: 'Space Mono', monospace;
         }
 
-        /* Tabs */
         .tabs {
             display: flex;
             border-bottom: 1px solid var(--border);
@@ -95,13 +88,8 @@
         }
 
         .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-        .tab.active {
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-        }
-
-        /* Scrollable content */
         .content {
             flex: 1;
             overflow-y: auto;
@@ -113,10 +101,7 @@
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
 
-        /* Section */
-        .section {
-            margin-bottom: 24px;
-        }
+        .section { margin-bottom: 24px; }
 
         .section-label {
             font-family: 'Space Mono', monospace;
@@ -137,7 +122,6 @@
             background: var(--border);
         }
 
-        /* Row */
         .row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -148,7 +132,6 @@
         .row.single { grid-template-columns: 1fr; }
         .row.triple { grid-template-columns: 1fr 1fr 1fr; }
 
-        /* Field */
         .field {
             display: flex;
             flex-direction: column;
@@ -177,11 +160,8 @@
         }
 
         .field input:focus,
-        .field select:focus {
-            border-color: var(--accent);
-        }
+        .field select:focus { border-color: var(--accent); }
 
-        /* Color field */
         .color-row {
             display: flex;
             align-items: center;
@@ -196,8 +176,7 @@
         .color-row:focus-within { border-color: var(--accent); }
 
         .color-row input[type="color"] {
-            width: 22px;
-            height: 22px;
+            width: 22px; height: 22px;
             border: none;
             border-radius: 4px;
             background: none;
@@ -216,7 +195,6 @@
             padding: 0;
         }
 
-        /* Toggle */
         .toggle-row {
             display: flex;
             align-items: center;
@@ -227,15 +205,11 @@
             padding: 10px 12px;
         }
 
-        .toggle-row span {
-            font-size: 12px;
-            color: var(--text);
-        }
+        .toggle-row span { font-size: 12px; color: var(--text); }
 
         .toggle {
             position: relative;
-            width: 36px;
-            height: 20px;
+            width: 36px; height: 20px;
         }
 
         .toggle input { opacity: 0; width: 0; height: 0; }
@@ -252,10 +226,8 @@
         .toggle-slider:before {
             content: '';
             position: absolute;
-            width: 14px;
-            height: 14px;
-            left: 3px;
-            top: 3px;
+            width: 14px; height: 14px;
+            left: 3px; top: 3px;
             background: var(--muted);
             border-radius: 50%;
             transition: 0.2s;
@@ -267,7 +239,59 @@
             background: white;
         }
 
-        /* Preview strip */
+        /* Clock anchor grid */
+        .anchor-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .anchor-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 44px);
+            grid-template-rows: repeat(3, 44px);
+            gap: 4px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .anchor-btn {
+            background: var(--border);
+            border: 1px solid transparent;
+            border-radius: 5px;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .anchor-btn:hover {
+            background: #2a2a3e;
+            color: var(--text);
+        }
+
+        .anchor-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: #9b8dff;
+            box-shadow: 0 0 8px rgba(124,106,255,0.4);
+        }
+
+        .anchor-label {
+            font-size: 11px;
+            color: var(--muted);
+            font-family: 'Space Mono', monospace;
+            letter-spacing: 1px;
+        }
+
+        /* Preview */
         .preview {
             background: var(--input-bg);
             border: 1px solid var(--border);
@@ -309,7 +333,6 @@
             position: relative;
         }
 
-        /* Footer */
         .footer {
             padding: 14px 24px;
             border-top: 1px solid var(--border);
@@ -331,30 +354,13 @@
             transition: all 0.2s;
         }
 
-        .btn-save {
-            background: var(--accent);
-            color: white;
-        }
-
+        .btn-save { background: var(--accent); color: white; }
         .btn-save:hover { background: #9b8dff; }
-
-        .btn-reload {
-            background: var(--border);
-            color: var(--text);
-        }
-
+        .btn-reload { background: var(--border); color: var(--text); }
         .btn-reload:hover { background: #2a2a3e; }
-
-        .btn-cancel {
-            background: transparent;
-            color: var(--muted);
-            border: 1px solid var(--border);
-            flex: 0.5;
-        }
-
+        .btn-cancel { background: transparent; color: var(--muted); border: 1px solid var(--border); flex: 0.5; }
         .btn-cancel:hover { color: var(--text); }
 
-        /* Toast */
         .toast {
             position: fixed;
             bottom: 70px;
@@ -371,12 +377,16 @@
             pointer-events: none;
         }
 
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
         select option { background: var(--input-bg); }
+
+        .hint {
+            font-size: 10px;
+            color: var(--muted);
+            margin-top: 4px;
+            font-family: 'Space Mono', monospace;
+        }
     </style>
 </head>
 <body>
@@ -413,8 +423,8 @@
             </div>
             <div class="row single">
                 <div class="field">
-                    <label>Letter Spacing (spaces between letters)</label>
-                    <input type="text" id="daySpacing" placeholder=" ">
+                    <label>Letter Spacing (px)</label>
+                    <input type="number" id="daySpacing" placeholder="10">
                 </div>
             </div>
         </div>
@@ -424,7 +434,7 @@
             <div class="row">
                 <div class="field">
                     <label>Font Family</label>
-                    <input type="text" id="dateFont" placeholder="Poppins">
+                    <input type="text" id="dateFont" placeholder="Rajdhani">
                 </div>
                 <div class="field">
                     <label>Font Size (px)</label>
@@ -438,7 +448,7 @@
             <div class="row">
                 <div class="field">
                     <label>Font Family</label>
-                    <input type="text" id="timeFont" placeholder="Poppins">
+                    <input type="text" id="timeFont" placeholder="Rajdhani">
                 </div>
                 <div class="field">
                     <label>Font Size (px)</label>
@@ -470,7 +480,36 @@
     <div class="tab-panel" id="tab-layout">
 
         <div class="section">
-            <div class="section-label">Vertical Position (negative = up)</div>
+            <div class="section-label">Clock Position</div>
+            <div class="anchor-wrap">
+                <div class="anchor-grid" id="anchorGrid">
+                    <button class="anchor-btn" data-pos="top-left"    title="Top Left">↖</button>
+                    <button class="anchor-btn" data-pos="top-center"  title="Top Center">↑</button>
+                    <button class="anchor-btn" data-pos="top-right"   title="Top Right">↗</button>
+                    <button class="anchor-btn" data-pos="middle-left" title="Middle Left">←</button>
+                    <button class="anchor-btn" data-pos="middle-center" title="Center">⊙</button>
+                    <button class="anchor-btn" data-pos="middle-right" title="Middle Right">→</button>
+                    <button class="anchor-btn" data-pos="bottom-left"  title="Bottom Left">↙</button>
+                    <button class="anchor-btn" data-pos="bottom-center" title="Bottom Center">↓</button>
+                    <button class="anchor-btn" data-pos="bottom-right" title="Bottom Right">↘</button>
+                </div>
+                <span class="anchor-label" id="anchorLabel">CENTER</span>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label>X Fine-tune (px)</label>
+                    <input type="number" id="clockOffsetX" placeholder="0">
+                </div>
+                <div class="field">
+                    <label>Y Fine-tune (px)</label>
+                    <input type="number" id="clockOffsetY" placeholder="0">
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Element Offsets (from anchor)</div>
+            <p class="hint" style="margin-bottom:10px">Negative = up, Positive = down. Relative to the anchor point above.</p>
             <div class="row triple">
                 <div class="field">
                     <label>Day Y</label>
@@ -528,11 +567,14 @@
 
         <div class="section">
             <div class="section-label">Shadow</div>
-            <div class="row single">
-                <label>
+            <div class="toggle-row" style="margin-bottom: 10px">
+                <span>Enable Shadow</span>
+                <label class="toggle">
                     <input type="checkbox" id="shadowToggle">
-                    Enable Shadow
+                    <span class="toggle-slider"></span>
                 </label>
+            </div>
+            <div class="row single">
                 <div class="field">
                     <label>Shadow Blur (px)</label>
                     <input type="number" id="shadowBlur" placeholder="40">
@@ -558,7 +600,7 @@
             <div class="section-label">Live Preview</div>
             <div class="preview">
                 <div class="preview-day" id="prev-day">MONDAY</div>
-                <div class="preview-date" id="prev-date">February 27, 2026</div>
+                <div class="preview-date" id="prev-date">April 21, 2026</div>
                 <div class="preview-time" id="prev-time">- 11:47 PM -</div>
             </div>
             <p style="font-size:11px; color: var(--muted); text-align:center">
@@ -581,10 +623,35 @@
     const fs = require("fs");
     const path = require("path");
     const { ipcRenderer } = require("electron");
-    // Load config
 
     let config = {};
     let configPath;
+    let currentAnchor = "middle-center";
+
+    const anchorLabels = {
+        "top-left": "TOP LEFT", "top-center": "TOP CENTER", "top-right": "TOP RIGHT",
+        "middle-left": "MIDDLE LEFT", "middle-center": "CENTER", "middle-right": "MIDDLE RIGHT",
+        "bottom-left": "BOTTOM LEFT", "bottom-center": "BOTTOM CENTER", "bottom-right": "BOTTOM RIGHT"
+    };
+
+    // Anchor grid click handler
+    document.getElementById("anchorGrid").addEventListener("click", (e) => {
+        const btn = e.target.closest(".anchor-btn");
+        if (!btn) return;
+        currentAnchor = btn.dataset.pos;
+        document.querySelectorAll(".anchor-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("anchorLabel").textContent = anchorLabels[currentAnchor] || currentAnchor.toUpperCase();
+    });
+
+    function setAnchor(pos) {
+        currentAnchor = pos || "middle-center";
+        document.querySelectorAll(".anchor-btn").forEach(b => {
+            b.classList.toggle("active", b.dataset.pos === currentAnchor);
+        });
+        document.getElementById("anchorLabel").textContent = anchorLabels[currentAnchor] || currentAnchor.toUpperCase();
+    }
+
     async function loadConfig() {
         const userDataPath = await ipcRenderer.invoke("get-user-data-path");
         configPath = path.join(userDataPath, "config.json");
@@ -595,45 +662,51 @@
             config = {};
         }
 
-
-
+        // Typography
         document.getElementById("dayFont").value = config.dayFont || "Anurati";
         document.getElementById("daySize").value = config.daySize || 110;
-        document.getElementById("daySpacing").value = config.daySpacing ?? " ";
+        document.getElementById("daySpacing").value = Number(config.daySpacing ?? 10);
         document.getElementById("dayY").value = config.dayY ?? -270;
 
-        document.getElementById("dateFont").value = config.dateFont || "Poppins";
+        document.getElementById("dateFont").value = config.dateFont || "Rajdhani";
         document.getElementById("dateSize").value = config.dateSize || 45;
         document.getElementById("dateY").value = config.dateY ?? -170;
 
-        document.getElementById("timeFont").value = config.timeFont || "Poppins";
+        document.getElementById("timeFont").value = config.timeFont || "Rajdhani";
         document.getElementById("timeSize").value = config.timeSize || 50;
         document.getElementById("timeY").value = config.timeY ?? -80;
         document.getElementById("timePrefix").value = config.timePrefix ?? "- ";
         document.getElementById("timeSuffix").value = config.timeSuffix ?? " -";
         document.getElementById("hour12").checked = config.hour12 !== false;
 
-        document.getElementById("fontColor").value = config.fontColor || "white";
-        document.getElementById("fontColorPicker").value = toHex(config.fontColor || "#ffffff");
-        document.getElementById("shadowColor").value = config.shadowColor || "black";
-        document.getElementById("shadowColorPicker").value = toHex(config.shadowColor || "#000000");
-        document.getElementById("shadowBlur").value = config.shadowBlur ?? 40;
-        document.getElementById("interval").value = config.interval ?? 60;
-
+        // Layout
+        setAnchor(config.clockAnchor || "middle-center");
+        document.getElementById("clockOffsetX").value = config.clockOffsetX ?? 0;
+        document.getElementById("clockOffsetY").value = config.clockOffsetY ?? 0;
         document.getElementById("canvasWidth").value = config.canvasWidth || 1920;
         document.getElementById("canvasHeight").value = config.canvasHeight || 1200;
 
-        updatePreview();}
+        // Style
+        document.getElementById("fontColor").value = config.fontColor || "#ffffff";
+        document.getElementById("fontColorPicker").value = toHex(config.fontColor || "#ffffff");
+        document.getElementById("shadowColor").value = config.shadowColor || "#000000";
+        document.getElementById("shadowColorPicker").value = toHex(config.shadowColor || "#000000");
+        document.getElementById("shadowToggle").checked = config.shadowEnabled !== false;
+        document.getElementById("shadowBlur").value = config.shadowBlur ?? 40;
+        document.getElementById("interval").value = config.interval ?? 60;
 
+        updatePreview();
+    }
 
     function toHex(color) {
+        if (!color) return "#ffffff";
         if (color.startsWith("#")) return color;
         if (color === "white") return "#ffffff";
         if (color === "black") return "#000000";
         return "#ffffff";
     }
 
-    // Color pickers sync
+    // Color picker sync
     document.getElementById("fontColorPicker").addEventListener("input", (e) => {
         document.getElementById("fontColor").value = e.target.value;
     });
@@ -643,12 +716,18 @@
     document.getElementById("fontColor").addEventListener("input", (e) => {
         if (e.target.value.startsWith("#")) document.getElementById("fontColorPicker").value = e.target.value;
     });
+    document.getElementById("shadowColor").addEventListener("input", (e) => {
+        if (e.target.value.startsWith("#")) document.getElementById("shadowColorPicker").value = e.target.value;
+    });
 
-    // Save
     function save() {
+        config.clockAnchor = currentAnchor;
+        config.clockOffsetX = parseInt(document.getElementById("clockOffsetX").value) || 0;
+        config.clockOffsetY = parseInt(document.getElementById("clockOffsetY").value) || 0;
+
         config.dayFont = document.getElementById("dayFont").value;
         config.daySize = parseInt(document.getElementById("daySize").value);
-        config.daySpacing = document.getElementById("daySpacing").value;
+        config.daySpacing = parseInt(document.getElementById("daySpacing").value) || 0;
         config.dayY = parseInt(document.getElementById("dayY").value);
 
         config.dateFont = document.getElementById("dateFont").value;
@@ -663,8 +742,7 @@
         config.hour12 = document.getElementById("hour12").checked;
 
         config.fontColor = document.getElementById("fontColor").value;
-        document.getElementById("shadowToggle").checked =
-            config.shadowEnabled !== false;
+        config.shadowEnabled = document.getElementById("shadowToggle").checked;
         config.shadowColor = document.getElementById("shadowColor").value;
         config.shadowBlur = parseInt(document.getElementById("shadowBlur").value);
         config.interval = parseInt(document.getElementById("interval").value);
@@ -706,7 +784,6 @@
             hour: "2-digit", minute: "2-digit",
             hour12: document.getElementById("hour12").checked
         });
-        const spacing = document.getElementById("daySpacing").value;
         const prefix = document.getElementById("timePrefix").value;
         const suffix = document.getElementById("timeSuffix").value;
         const color = document.getElementById("fontColor").value;
@@ -719,7 +796,6 @@
         document.getElementById("prev-time").style.color = color;
     }
 
-    // Clock in header
     function updateClock() {
         const now = new Date();
         document.getElementById("clock").textContent = now.toLocaleTimeString("en-US", {

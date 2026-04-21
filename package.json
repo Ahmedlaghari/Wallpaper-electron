@@ -25,6 +25,11 @@
     },
     "nsis": {
       "include": "installer.nsh"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Ahmedlaghari",
+      "repo": "Wallpaper-electron"
     }
   },
   "files": [
@@ -41,9 +46,8 @@
     "node_modules/@napi-rs/**",
     "config.json",
     "icon.png",
-    "fonts/*"
+    "fonts"
   ],
-
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
     "electron": "^40.6.1",
@@ -51,6 +55,7 @@
   },
   "dependencies": {
     "canvas": "^3.2.1",
+    "electron-updater": "^6.8.3",
     "sharp": "^0.34.5",
     "wallpaper": "^7.2.1"
   }
