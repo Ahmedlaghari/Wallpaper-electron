@@ -6,9 +6,14 @@ const { autoUpdater } = require("electron-updater");
 
 const bgPathFile = path.join(app.getPath("userData"), "bgpath.txt");
 const configPath = path.join(app.getPath("userData"), "config.json");
-
+let updater = null;
 ipcMain.on("reload-wallpaper", async () => {
     await generateWallpaper();
+    scheduleNextUpdate();
+});
+
+ipcMain.on("settings-updated", () => {
+    scheduleNextUpdate();
 });
 
 async function getImage() {
@@ -49,6 +54,7 @@ function ensureConfigExists() {
             shadowColor: "black",
             shadowBlur: 40,
 
+            interval: 60,
             canvasWidth: 1920,
             canvasHeight: 1200
         };
@@ -127,7 +133,7 @@ public class Wallpaper {
     const day = now.toLocaleDateString("en-US", { weekday: "long" });
     const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     const time = now.toLocaleTimeString("en-US", {
-        hour: "2-digit", minute: "2-digit", hour12: config.hour12 !== false
+        hour: "2-digit", minute: "2-digit", ...(config.seconds && {second:"2-digit"}), hour12: config.hour12 !== false
     });
 
     const { baseX, baseY, textAlign } = getClockBase(config, width, height);
@@ -185,17 +191,24 @@ public class Wallpaper {
         baseY + (config.timeY ?? -80)
     );
 
-    const buffer = canvas.toBuffer("image/png");
-    const filePath = path.join(app.getPath("userData"), "wallpaper.png");
+    const buffer = canvas.toBuffer("image/jpeg");
+    const filePath = path.join(app.getPath("userData"), "wallpaper.jpeg");
     fs.writeFileSync(filePath, buffer);
 
     setWallpaper(filePath);
 }
-
+let updateTimer =null;
 function scheduleNextUpdate() {
-    const now = new Date();
-    const delay = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-    setTimeout(async () => {
+    if (updateTimer) {
+        clearTimeout(updateTimer);
+    }
+
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+
+    const intervalSeconds = Number.parseInt(config.interval, 10);
+    const delay = Math.max(1, Number.isFinite(intervalSeconds) ? intervalSeconds : 60) * 1000;
+
+    updateTimer = setTimeout(async () => {
         await generateWallpaper();
         scheduleNextUpdate();
     }, delay);
@@ -220,6 +233,7 @@ function openSettings() {
 
 let tray = null;
 let updateReady = false;
+let updateDownloading = false;
 
 function buildTrayMenu() {
     const template = [
@@ -235,6 +249,9 @@ function buildTrayMenu() {
 
     if (updateReady) {
         template.push({ label: "Restart to Install Update", click: () => autoUpdater.quitAndInstall() });
+        template.push({ type: "separator" });
+    } else if (updateDownloading) {
+        template.push({ label: "Downloading Update...", enabled: false });
         template.push({ type: "separator" });
     } else {
         template.push({ label: "Check for Updates", click: () => {
@@ -256,6 +273,8 @@ function setupAutoUpdater() {
 
     autoUpdater.on("update-available", (info) => {
         console.log("Update available:", info.version);
+        updateDownloading = true;
+        buildTrayMenu();
         if (Notification.isSupported()) {
             new Notification({
                 title: "Time Wallpaper",
@@ -264,20 +283,33 @@ function setupAutoUpdater() {
         }
     });
 
+    autoUpdater.on("download-progress", (progress) => {
+        console.log(`Update download progress: ${Math.round(progress.percent)}%`);
+    });
+
     autoUpdater.on("update-downloaded", (info) => {
         console.log("Update downloaded:", info.version);
+        updateDownloading = false;
         updateReady = true;
         buildTrayMenu();
         if (Notification.isSupported()) {
             new Notification({
                 title: "Time Wallpaper",
-                body: `v${info.version} ready — right-click the tray icon to restart and install.`
+                body: `v${info.version} ready - right-click the tray icon to restart and install.`
             }).show();
         }
     });
 
     autoUpdater.on("error", (err) => {
         console.error("Auto-update error:", err.message);
+        updateDownloading = false;
+        buildTrayMenu();
+        if (Notification.isSupported()) {
+            new Notification({
+                title: "Time Wallpaper update failed",
+                body: err.message || "Could not download the update."
+            }).show();
+        }
     });
 
     // Check on startup, then every 4 hours

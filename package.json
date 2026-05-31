@@ -1,6 +1,6 @@
 {
   "name": "time-wallpaper",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Time Wallpaper App",
   "author": "Your Name",
   "main": "main.js",
@@ -21,7 +21,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"
+      "icon": "icon.ico",
+      "artifactName": "Time-Wallpaper-Setup-${version}.${ext}"
     },
     "nsis": {
       "include": "installer.nsh"
