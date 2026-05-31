@@ -7,9 +7,43 @@ const { autoUpdater } = require("electron-updater");
 const bgPathFile = path.join(app.getPath("userData"), "bgpath.txt");
 const configPath = path.join(app.getPath("userData"), "config.json");
 let updater = null;
+let wallpaperApi = null;
+let cachedBgPath = null;
+let cachedBgImage = null;
+let wallpaperWriteIndex = 0;
+let wallpaperUpdateInProgress = false;
+
+async function setDesktopWallpaper(imagePath) {
+    if (!wallpaperApi) {
+        wallpaperApi = await import("wallpaper");
+    }
+
+    await wallpaperApi.setWallpaper(imagePath);
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function runWallpaperUpdate({ skipIfBusy = false } = {}) {
+    if (skipIfBusy && wallpaperUpdateInProgress) {
+        return;
+    }
+
+    while (wallpaperUpdateInProgress) {
+        await wait(50);
+    }
+
+    wallpaperUpdateInProgress = true;
+    try {
+        await generateWallpaper();
+    } finally {
+        wallpaperUpdateInProgress = false;
+    }
+}
+
 ipcMain.on("reload-wallpaper", async () => {
-    await generateWallpaper();
-    scheduleNextUpdate();
+    await runWallpaperUpdate();
 });
 
 ipcMain.on("settings-updated", () => {
@@ -102,23 +136,9 @@ async function generateWallpaper() {
         return;
     }
 
-    const bgImage = await loadImage(selectedImagePath);
-    const { execSync } = require("child_process");
-
-    function setWallpaper(imagePath) {
-        const escaped = imagePath.replace(/'/g, "''");
-        const script = `Add-Type -TypeDefinition @'
-using System.Runtime.InteropServices;
-public class Wallpaper {
-    [DllImport("user32.dll")]
-    public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
-}
-'@
-[Wallpaper]::SystemParametersInfo(20, 0, '${escaped}', 3)`;
-
-        const scriptPath = path.join(app.getPath("temp"), "set-wallpaper.ps1");
-        fs.writeFileSync(scriptPath, script, "utf-8");
-        execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`);
+    if (cachedBgPath !== selectedImagePath || !cachedBgImage) {
+        cachedBgPath = selectedImagePath;
+        cachedBgImage = await loadImage(selectedImagePath);
     }
 
     const width = config.canvasWidth || 1920;
@@ -127,13 +147,13 @@ public class Wallpaper {
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
-    ctx.drawImage(bgImage, 0, 0, width, height);
+    ctx.drawImage(cachedBgImage, 0, 0, width, height);
 
     const now = new Date();
     const day = now.toLocaleDateString("en-US", { weekday: "long" });
     const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     const time = now.toLocaleTimeString("en-US", {
-        hour: "2-digit", minute: "2-digit", ...(config.seconds && {second:"2-digit"}), hour12: config.hour12 !== false
+        hour: "2-digit", minute: "2-digit", hour12: config.hour12 !== false
     });
 
     const { baseX, baseY, textAlign } = getClockBase(config, width, height);
@@ -192,15 +212,25 @@ public class Wallpaper {
     );
 
     const buffer = canvas.toBuffer("image/jpeg");
-    const filePath = path.join(app.getPath("userData"), "wallpaper.jpeg");
+    wallpaperWriteIndex = (wallpaperWriteIndex + 1) % 2;
+    const filePath = path.join(app.getPath("userData"), `wallpaper-${wallpaperWriteIndex}.jpeg`);
     fs.writeFileSync(filePath, buffer);
 
-    setWallpaper(filePath);
+    await setDesktopWallpaper(filePath);
 }
-let updateTimer =null;
+let updateTimer = null;
+
+async function runScheduledWallpaperUpdate() {
+    try {
+        await runWallpaperUpdate({ skipIfBusy: true });
+    } catch (e) {
+        console.error("Scheduled wallpaper update failed:", e);
+    }
+}
+
 function scheduleNextUpdate() {
     if (updateTimer) {
-        clearTimeout(updateTimer);
+        clearInterval(updateTimer);
     }
 
     const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
@@ -208,10 +238,7 @@ function scheduleNextUpdate() {
     const intervalSeconds = Number.parseInt(config.interval, 10);
     const delay = Math.max(1, Number.isFinite(intervalSeconds) ? intervalSeconds : 60) * 1000;
 
-    updateTimer = setTimeout(async () => {
-        await generateWallpaper();
-        scheduleNextUpdate();
-    }, delay);
+    updateTimer = setInterval(runScheduledWallpaperUpdate, delay);
 }
 
 let settingsWindow = null;
@@ -239,11 +266,11 @@ function buildTrayMenu() {
     const template = [
         { label: "Change Background", click: async () => {
             await getImage();
-            await generateWallpaper();
+            await runWallpaperUpdate();
         }},
         { type: "separator" },
         { label: "Settings", click: () => openSettings() },
-        { label: "Reload Wallpaper", click: async () => { await generateWallpaper(); }},
+        { label: "Reload Wallpaper", click: async () => { await runWallpaperUpdate(); }},
         { type: "separator" },
     ];
 
@@ -347,7 +374,7 @@ app.whenReady().then(async () => {
     buildTrayMenu();
     ipcMain.handle("get-user-data-path", () => app.getPath("userData"));
 
-    try { await generateWallpaper(); } catch (e) { console.error('Wallpaper error:', e); }
+    try { await runWallpaperUpdate(); } catch (e) { console.error('Wallpaper error:', e); }
     scheduleNextUpdate();
 
     if (app.isPackaged) setupAutoUpdater();

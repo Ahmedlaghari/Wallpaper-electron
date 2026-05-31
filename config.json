@@ -19,7 +19,6 @@
   "timePrefix": "- ",
   "timeSuffix": " -",
   "hour12": true,
-  "seconds": true,
   "interval": 60,
   "canvasWidth": 1920,
   "canvasHeight": 1200
