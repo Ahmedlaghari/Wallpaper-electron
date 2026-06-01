@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Wallpaper</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            user-select: none;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        #wallpaper {
+            position: fixed;
+            inset: 0;
+            background-position: center;
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+
+        #clock-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<div id="wallpaper">
+    <canvas id="clock-canvas"></canvas>
+</div>
+
+<script>
+    const { ipcRenderer } = require("electron");
+
+    let config = {};
+    let timer = null;
+    let canvas = null;
+    let context = null;
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+
+    function fileUrl(filePath) {
+        if (!filePath) return "";
+        return "file:///" + filePath.replace(/\\/g, "/").replace(/#/g, "%23").replace(/\?/g, "%3F");
+    }
+
+    function injectFont(name, filePath) {
+        if (!filePath) return;
+
+        const style = document.createElement("style");
+        style.textContent = `
+            @font-face {
+                font-family: '${name}';
+                src: url('${fileUrl(filePath)}');
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function setCanvasSize() {
+        if (!canvas) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const width = Math.floor(window.innerWidth * dpr);
+        const height = Math.floor(window.innerHeight * dpr);
+
+        if (width === canvasWidth && height === canvasHeight) {
+            return;
+        }
+
+        canvasWidth = width;
+        canvasHeight = height;
+        canvas.width = width;
+        canvas.height = height;
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function getClockBase(anchor, offsetX, offsetY) {
+        const [vAnchor, hAnchor] = (anchor || "middle-center").split("-");
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        let baseX;
+        let baseY;
+        let textAlign;
+
+        if (hAnchor === "left") {
+            baseX = Math.round(width * 0.08) + (Number(offsetX) || 0);
+            textAlign = "left";
+        } else if (hAnchor === "right") {
+            baseX = Math.round(width * 0.92) + (Number(offsetX) || 0);
+            textAlign = "right";
+        } else {
+            baseX = Math.round(width / 2) + (Number(offsetX) || 0);
+            textAlign = "center";
+        }
+
+        if (vAnchor === "top") {
+            baseY = Math.round(height * 0.15) + (Number(offsetY) || 0);
+        } else if (vAnchor === "bottom") {
+            baseY = Math.round(height * 0.82) + (Number(offsetY) || 0);
+        } else {
+            baseY = Math.round(height / 2) + (Number(offsetY) || 0);
+        }
+
+        return { baseX, baseY, textAlign };
+    }
+
+    function applyConfig(data) {
+        config = data.config || {};
+
+        injectFont("Anurati", data.fonts && data.fonts.anurati);
+        injectFont("Rajdhani", data.fonts && data.fonts.rajdhani);
+        injectFont("Poppins", data.fonts && data.fonts.poppins);
+
+        const wallpaper = document.getElementById("wallpaper");
+        if (data.backgroundPath) {
+            wallpaper.style.backgroundImage = `url("${fileUrl(data.backgroundPath)}")`;
+        }
+
+        setCanvasSize();
+
+        updateClock();
+    }
+
+    async function loadData() {
+        const data = await ipcRenderer.invoke("get-live-wallpaper-data");
+        applyConfig(data);
+    }
+
+    function updateClock() {
+        if (!context) {
+            return;
+        }
+
+        const now = new Date();
+        const day = now.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
+        const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        const time = now.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: config.hour12 !== false
+        });
+
+        const { baseX, baseY, textAlign } = getClockBase(config.clockAnchor, config.clockOffsetX, config.clockOffsetY);
+
+        context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        context.save();
+        context.fillStyle = config.fontColor || "#fff";
+        context.textBaseline = "alphabetic";
+        context.textAlign = textAlign;
+        if (config.shadowEnabled !== false) {
+            context.shadowBlur = Number(config.shadowBlur ?? 40);
+            context.shadowColor = config.shadowColor || "#000";
+        } else {
+            context.shadowBlur = 0;
+            context.shadowColor = "transparent";
+        }
+
+        context.font = `${Number(config.daySize) || 110}px ${config.dayFont || "Anurati"}`;
+        const dayY = baseY + (Number(config.dayY ?? -270));
+        context.fillText(day, baseX, dayY);
+
+        context.font = `${Number(config.dateSize) || 45}px ${config.dateFont || "Rajdhani"}`;
+        const dateY = baseY + (Number(config.dateY ?? -170));
+        context.fillText(date, baseX, dateY);
+
+        context.font = `${Number(config.timeSize) || 50}px ${config.timeFont || "Rajdhani"}`;
+        const formattedTime = `${config.timePrefix ?? "- "}${time}${config.timeSuffix ?? " -"}`;
+        const timeY = baseY + (Number(config.timeY ?? -80));
+        context.fillText(formattedTime, baseX, timeY);
+        context.restore();
+    }
+
+    ipcRenderer.on("live-settings-updated", () => {
+        loadData();
+    });
+
+    canvas = document.getElementById("clock-canvas");
+    context = canvas.getContext("2d");
+    window.addEventListener("resize", () => {
+        setCanvasSize();
+        updateClock();
+    });
+
+    loadData();
+    timer = setInterval(updateClock, 1000);
+    window.addEventListener("beforeunload", () => clearInterval(timer));
+</script>
+</body>
+</html>
