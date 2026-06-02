@@ -4,8 +4,11 @@ const {
 } = require("electron");
 const fs   = require("fs");
 const path = require("path");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 const { autoUpdater } = require("electron-updater");
+const execFileAsync = promisify(execFile);
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 const bgPathFile  = path.join(app.getPath("userData"), "bgpath.txt");
@@ -27,8 +30,6 @@ let settingsWindow    = null;
 let updateReady       = false;
 let updateDownloading = false;
 
-// ─── Logging ──────────────────────────────────────────────────────────────────
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -48,29 +49,48 @@ function readBackgroundPath() {
 function ensureConfigExists() {
     if (fs.existsSync(configPath)) return;
     const defaultConfig = {
+        // Clock visibility & layout
+        clockEnabled:  true,
         clockAnchor:   "middle-center",
         clockOffsetX:  0,
         clockOffsetY:  0,
+
+        // Day text
         dayFont:    "Anurati",
         daySize:    110,
         daySpacing: 10,
         dayY:       -270,
+
+        // Date text
         dateFont: "Rajdhani",
         dateSize: 45,
         dateY:    -170,
+
+        // Time text
         timeFont:   "Rajdhani",
         timeSize:   50,
         timeY:      -80,
         timePrefix: "- ",
         timeSuffix: " -",
         hour12:     true,
+        showSeconds: false,   // live wallpaper only — shows HH:MM:SS when true
+
+        // Clock style
         fontColor:     "white",
         shadowEnabled: true,
         shadowColor:   "black",
         shadowBlur:    40,
+
+        // Static wallpaper timing
         interval:     60,
         canvasWidth:  1920,
-        canvasHeight: 1200
+        canvasHeight: 1080,
+
+        // Video wallpaper
+        videoEnabled: false,
+        videoPath:    "",
+        videoVolume:  0,        // 0 = muted by default (system audio courtesy)
+        videoLoop:    true,
     };
     fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
     console.log("Created default config at", configPath);
@@ -96,10 +116,103 @@ function getClockBase(config, width, height) {
     return { baseX, baseY, textAlign };
 }
 
-// ─── Wallpaper API ────────────────────────────────────────────────────────────
-async function setDesktopWallpaper(imagePath) {
+// ─── Wallpaper API (static mode) ─────────────────────────────────────────────
+async function setDesktopWallpaper(imagePath, options = {}) {
     if (!wallpaperApi) wallpaperApi = await import("wallpaper");
-    await wallpaperApi.setWallpaper(imagePath);
+    await wallpaperApi.setWallpaper(imagePath, options);
+}
+
+function drawImageCover(ctx, image, x, y, width, height) {
+    const imageRatio  = image.width / image.height;
+    const targetRatio = width / height;
+    let sourceX = 0, sourceY = 0;
+    let sourceWidth = image.width, sourceHeight = image.height;
+
+    if (imageRatio > targetRatio) {
+        sourceWidth = Math.round(image.height * targetRatio);
+        sourceX     = Math.round((image.width - sourceWidth) / 2);
+    } else {
+        sourceHeight = Math.round(image.width / targetRatio);
+        sourceY      = Math.round((image.height - sourceHeight) / 2);
+    }
+    ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+}
+
+async function setWindowsPerMonitorWallpapers(imagePaths) {
+    const powerShellPaths = imagePaths
+        .map(filePath => `'${filePath.replace(/'/g, "''")}'`)
+        .join(",");
+
+    // Use Activator.CreateInstance with the DesktopWallpaper CLSID and then
+    // Marshal.GetTypedObjectForIUnknown to get the typed interface pointer.
+    // The direct cast  [IDesktopWallpaper](New-Object DesktopWallpaper)  fails
+    // on PowerShell 7+ / .NET 5+ because the CLR no longer allows implicit
+    // COM-interop casts across assembly boundaries.
+    const script = `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public enum DesktopWallpaperPosition { Center=0, Tile=1, Stretch=2, Fit=3, Fill=4, Span=5 }
+
+[ComImport, Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B"),
+ InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IDesktopWallpaper {
+    void SetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID,
+                      [MarshalAs(UnmanagedType.LPWStr)] string wallpaper);
+    [return: MarshalAs(UnmanagedType.LPWStr)] string GetWallpaper(
+        [MarshalAs(UnmanagedType.LPWStr)] string monitorID);
+    [return: MarshalAs(UnmanagedType.LPWStr)] string GetMonitorDevicePathAt(uint monitorIndex);
+    uint GetMonitorDevicePathCount();
+    void GetMonitorRECT([MarshalAs(UnmanagedType.LPWStr)] string monitorID, out WallRect displayRect);
+    void SetBackgroundColor(uint color);
+    uint GetBackgroundColor();
+    void SetPosition(DesktopWallpaperPosition position);
+    DesktopWallpaperPosition GetPosition();
+    void SetSlideshow(IntPtr items);
+    IntPtr GetSlideshow();
+    void SetSlideshowOptions(uint options, uint slideshowTick);
+    void GetSlideshowOptions(out uint options, out uint slideshowTick);
+    void AdvanceSlideshow([MarshalAs(UnmanagedType.LPWStr)] string monitorID, uint direction);
+    uint GetStatus();
+    bool Enable(bool enable);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct WallRect { public int Left, Top, Right, Bottom; }
+
+public static class WallpaperHelper {
+    static readonly Guid CLSID = new Guid("C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD");
+    static readonly Guid IID   = new Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B");
+
+    [DllImport("ole32.dll")]
+    static extern int CoCreateInstance(ref Guid rclsid, IntPtr pUnkOuter,
+        uint dwClsContext, ref Guid riid, out IntPtr ppv);
+
+    public static IDesktopWallpaper Create() {
+        Guid clsid = CLSID, iid = IID;
+        int hr = CoCreateInstance(ref clsid, IntPtr.Zero, 1, ref iid, out IntPtr ppv);
+        if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+        var obj = Marshal.GetObjectForIUnknown(ppv);
+        Marshal.Release(ppv);
+        return (IDesktopWallpaper)obj;
+    }
+}
+"@ -ErrorAction Stop
+
+$wallpaper = [WallpaperHelper]::Create()
+$wallpaper.SetPosition([DesktopWallpaperPosition]::Fill)
+$paths = @(${powerShellPaths})
+$count = [int]$wallpaper.GetMonitorDevicePathCount()
+for ($i = 0; $i -lt $count; $i++) {
+    $monitorId = $wallpaper.GetMonitorDevicePathAt([uint32]$i)
+    $imagePath = $paths[[Math]::Min($i, $paths.Length - 1)]
+    $wallpaper.SetWallpaper($monitorId, $imagePath)
+}
+`;
+    await execFileAsync("powershell.exe", [
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script
+    ], { windowsHide: true });
 }
 
 // ─── Static wallpaper generation ─────────────────────────────────────────────
@@ -116,15 +229,49 @@ async function generateWallpaper() {
         console.log("Loading background image:", selectedImagePath);
         cachedBgPath  = selectedImagePath;
         cachedBgImage = await loadImage(selectedImagePath);
-        console.log("Background image loaded. Size:", cachedBgImage.width, "x", cachedBgImage.height);
+        console.log("Background image loaded:", cachedBgImage.width, "x", cachedBgImage.height);
     }
 
-    const width  = config.canvasWidth  || 1920;
-    const height = config.canvasHeight || 1200;
-    const canvas = createCanvas(width, height);
-    const ctx    = canvas.getContext("2d");
-    ctx.drawImage(cachedBgImage, 0, 0, width, height);
+    wallpaperWriteIndex = (wallpaperWriteIndex + 1) % 2;
+    const displays  = getSortedDisplays();
+    const outputPaths = [];
 
+    for (let i = 0; i < displays.length; i++) {
+        const display     = displays[i];
+        const scaleFactor = display.scaleFactor || 1;
+        const width       = Math.round(display.bounds.width  * scaleFactor);
+        const height      = Math.round(display.bounds.height * scaleFactor);
+
+        console.log(
+            `Static wallpaper display ${display.id}: ${width}x${height} physical px ` +
+            `(logical=${display.bounds.width}x${display.bounds.height}, scale=${scaleFactor})`
+        );
+
+        const canvas = createCanvas(width, height);
+        const ctx    = canvas.getContext("2d");
+        drawImageCover(ctx, cachedBgImage, 0, 0, width, height);
+        if (config.clockEnabled !== false) _drawClock(ctx, config, width, height);
+
+        const filePath = path.join(app.getPath("userData"), `wallpaper-${wallpaperWriteIndex}-display-${i}.jpeg`);
+        const tmpPath  = filePath + ".tmp";
+        fs.writeFileSync(tmpPath, canvas.toBuffer("image/jpeg", { quality: 0.95 }));
+        fs.renameSync(tmpPath, filePath);
+        outputPaths.push(filePath);
+        console.log("Wallpaper written to", filePath);
+    }
+
+    if (process.platform === "win32") {
+        await setWindowsPerMonitorWallpapers(outputPaths);
+    } else if (process.platform === "darwin") {
+        await Promise.all(outputPaths.map((fp, i) => setDesktopWallpaper(fp, { screen: i, scale: "fill" })));
+    } else {
+        await setDesktopWallpaper(outputPaths[0], { scale: "fill" });
+    }
+
+    console.log(`Applied ${outputPaths.length} wallpaper(s).`);
+}
+
+function _drawClock(ctx, config, width, height) {
     const now  = new Date();
     const day  = now.toLocaleDateString("en-US", { weekday: "long" });
     const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -174,16 +321,6 @@ async function generateWallpaper() {
         dayCenterX,
         baseY + (config.timeY ?? -80)
     );
-
-    wallpaperWriteIndex = (wallpaperWriteIndex + 1) % 2;
-    const filePath = path.join(app.getPath("userData"), `wallpaper-${wallpaperWriteIndex}.jpeg`);
-    const tmpPath  = filePath + ".tmp";
-    fs.writeFileSync(tmpPath, canvas.toBuffer("image/jpeg"));
-    fs.renameSync(tmpPath, filePath);
-    console.log("Wallpaper written to", filePath);
-
-    await setDesktopWallpaper(filePath);
-    console.log("Wallpaper applied.");
 }
 
 // ─── Run / schedule static updates ───────────────────────────────────────────
@@ -221,25 +358,21 @@ function startStaticUpdates() {
     }, delay);
 }
 
-function scheduleNextUpdate() { startStaticUpdates(); }
-
 // ─── IPC ──────────────────────────────────────────────────────────────────────
 ipcMain.on("reload-wallpaper", async () => {
-    console.log("IPC: reload-wallpaper");
     if (liveWindows.length > 0) refreshLiveWallpaper();
     else await runWallpaperUpdate();
 });
 
 ipcMain.on("settings-updated", () => {
-    console.log("IPC: settings-updated");
     startStaticUpdates();
     refreshLiveWallpaper();
 });
 
 ipcMain.handle("get-user-data-path",      () => app.getPath("userData"));
-ipcMain.handle("get-live-wallpaper-data", () => getLiveWallpaperData());
+ipcMain.handle("get-live-wallpaper-data", event => getLiveWallpaperData(event.sender));
 
-// ─── Background picker ────────────────────────────────────────────────────────
+// ─── Background / video picker ────────────────────────────────────────────────
 async function getImage() {
     const result = await dialog.showOpenDialog({
         filters: [{ name: "Images", extensions: ["jpg", "png"] }]
@@ -252,14 +385,78 @@ async function getImage() {
     }
 }
 
+// Opens a file picker for video, writes the path into config.videoPath
+// and enables videoEnabled.
+async function pickVideoWallpaper() {
+    const result = await dialog.showOpenDialog({
+        title: "Select Video Wallpaper",
+        filters: [{ name: "Videos", extensions: ["mp4", "webm", "mov", "mkv"] }]
+    });
+    if (result.canceled || !result.filePaths.length) return;
+
+    const videoPath = result.filePaths[0];
+    const config    = readConfig();
+    config.videoEnabled = true;
+    config.videoPath    = videoPath;
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    console.log("Video wallpaper set to:", videoPath);
+    return videoPath;
+}
+
 // ─── Live wallpaper data ──────────────────────────────────────────────────────
-function getLiveWallpaperData() {
+function getLiveWallpaperData(sender = null) {
     const fontsDir = app.isPackaged
         ? path.join(process.resourcesPath, "app.asar.unpacked", "fonts")
         : path.join(__dirname, "fonts");
+
+    const allDisplays = getSortedDisplays();
+    const virtualBounds = getVirtualBounds(allDisplays);
+    const targetWindow = sender ? BrowserWindow.fromWebContents(sender) : null;
+    const targetDisplayId = targetWindow?.liveDisplayId;
+    const targetDisplay = targetDisplayId
+        ? allDisplays.find(d => String(d.id) === String(targetDisplayId))
+        : null;
+
+    if (targetDisplay) {
+        const display = {
+            id:          targetDisplay.id,
+            bounds:      { x: 0, y: 0, width: targetDisplay.bounds.width, height: targetDisplay.bounds.height },
+            scaleFactor: targetDisplay.scaleFactor,
+            offsetX:     0,
+            offsetY:     0,
+            physicalWidth:  Math.round(targetDisplay.bounds.width  * targetDisplay.scaleFactor),
+            physicalHeight: Math.round(targetDisplay.bounds.height * targetDisplay.scaleFactor),
+        };
+
+        return {
+            config:         readConfig(),
+            backgroundPath: readBackgroundPath(),
+            virtualBounds:   { x: 0, y: 0, width: targetDisplay.bounds.width, height: targetDisplay.bounds.height },
+            display,
+            displays: [display],
+            fonts: {
+                anurati:  path.join(fontsDir, "anurati.ttf"),
+                rajdhani: path.join(fontsDir, "Rajdhani-Bold.ttf"),
+                poppins:  path.join(fontsDir, "poppins.semibold.ttf")
+            }
+        };
+    }
+
+    const displays = allDisplays.map(d => ({
+        id:          d.id,
+        bounds:      d.bounds,
+        scaleFactor: d.scaleFactor,
+        offsetX:     Math.round(d.bounds.x - virtualBounds.x),
+        offsetY:     Math.round(d.bounds.y - virtualBounds.y),
+        physicalWidth:  Math.round(d.bounds.width  * d.scaleFactor),
+        physicalHeight: Math.round(d.bounds.height * d.scaleFactor),
+    }));
+
     return {
         config:         readConfig(),
         backgroundPath: readBackgroundPath(),
+        virtualBounds,
+        displays,
         fonts: {
             anurati:  path.join(fontsDir, "anurati.ttf"),
             rajdhani: path.join(fontsDir, "Rajdhani-Bold.ttf"),
@@ -268,195 +465,77 @@ function getLiveWallpaperData() {
     };
 }
 
-// ─── Live wallpaper – Windows desktop attachment ──────────────────────────────
-function getWindowHandle(win) {
-    const handle = win.getNativeWindowHandle();
-    return (process.arch === "x64")
-        ? handle.readBigUInt64LE(0).toString()
-        : handle.readUInt32LE(0).toString();
-}
-
-function getDisplayForLiveWindow(win) {
-    const displays = screen.getAllDisplays();
-    return displays.find(d => d.id === win.liveDisplayId)
-        || screen.getDisplayMatching(win.getBounds());
-}
+// ─── electron-as-wallpaper ────────────────────────────────────────────────────
+const { attach, detach } = require("electron-as-wallpaper");
 
 function attachWindowToDesktop(win) {
-    if (process.platform !== "win32") {
-        console.log("Non-win32 platform — skipping desktop attach.");
-        return;
-    }
+    if (process.platform !== "win32") return;
     if (win.isAttachedToDesktop) return;
-    win.isAttachedToDesktop = true;
+    if (win.isDestroyed())       return;
 
-    const { execFile } = require("child_process");
-    const bounds = win.getBounds();
-    const hwnd   = getWindowHandle(win);
-
-    console.log(`[attach] display=${win.liveDisplayId} hwnd=${hwnd} bounds=${JSON.stringify(bounds)}`);
-
-    // No JS interpolation inside the PS script body — pass everything as -Args
-    // to avoid conflicts between JS ${...} and PowerShell ${...} syntax
-    const script = `param($hwnd, $bx, $by, $bw, $bh)
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-
-public class DesktopWindow {
-    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
-
-    [DllImport("user32.dll")]
-    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-}
-"@
-
-# FindWindow can fail when called from a child process of Electron.
-# FindWindowEx with IntPtr.Zero parent searches all top-level windows reliably.
-$progman = [DesktopWindow]::FindWindowEx([IntPtr]::Zero, [IntPtr]::Zero, "Progman", $null)
-Write-Host "[PS] Progman: $progman"
-if ($progman -eq [IntPtr]::Zero) {
-    Write-Host "[PS] ERROR: Could not find Progman - aborting"
-    exit 1
-}
-
-$result = [IntPtr]::Zero
-[DesktopWindow]::SendMessageTimeout($progman, 0x052C, [IntPtr]::Zero, [IntPtr]::Zero, 0, 1000, [ref]$result) | Out-Null
-Write-Host "[PS] SendMessageTimeout done"
-
-$script:workerw = [IntPtr]::Zero
-$callback = [DesktopWindow+EnumWindowsProc] {
-    param([IntPtr]$topHandle, [IntPtr]$topParam)
-    $defView = [DesktopWindow]::FindWindowEx($topHandle, [IntPtr]::Zero, "SHELLDLL_DefView", $null)
-    if ($defView -ne [IntPtr]::Zero) {
-        $script:workerw = [DesktopWindow]::FindWindowEx([IntPtr]::Zero, $topHandle, "WorkerW", $null)
-        Write-Host "[PS] Found WorkerW: $($script:workerw)"
+    try {
+        attach(win, { transparent: true });
+        win.isAttachedToDesktop = true;
+        console.log(`[attach] SUCCESS display=${win.liveDisplayId}`);
+    } catch (e) {
+        console.error(`[attach] FAILED display=${win.liveDisplayId}:`, e.message);
+        win.isAttachedToDesktop = false;
     }
-    return $true
 }
 
-[DesktopWindow]::EnumWindows($callback, [IntPtr]::Zero) | Out-Null
-
-if ($script:workerw -eq [IntPtr]::Zero) {
-    Write-Host "[PS] WorkerW not found - falling back to Progman"
-    $script:workerw = $progman
-} else {
-    Write-Host "[PS] Using WorkerW: $($script:workerw)"
+// ─── Display helpers ──────────────────────────────────────────────────────────
+// Returns displays sorted LEFT-TO-RIGHT by their X position.
+//
+// Windows WorkerW assigns child-window slots in physical left-to-right order,
+// NOT by which display is "primary". Sorting by bounds.x matches that order,
+// which is the only way attach() lands each window on the correct monitor when
+// running extended (non-duplicate) displays.
+//
+// Tie-break by Y (top-to-bottom) for vertically stacked monitors.
+function getSortedDisplays() {
+    return screen.getAllDisplays().slice().sort((a, b) => {
+        if (a.bounds.x !== b.bounds.x) return a.bounds.x - b.bounds.x;
+        return a.bounds.y - b.bounds.y;
+    });
 }
 
-$target = [IntPtr][long]$hwnd
-Write-Host "[PS] Target HWND: $target"
-
-$setParentResult = [DesktopWindow]::SetParent($target, $script:workerw)
-Write-Host "[PS] SetParent result: $setParentResult"
-
-[DesktopWindow]::ShowWindow($target, 5) | Out-Null
-Write-Host "[PS] ShowWindow done"
-
-# Step 1: Register as TOPMOST — IShellDispatch.MinimizeAll (Show Desktop gesture)
-# skips windows that have the TOPMOST bit set in their Z-order metadata.
-# HWND_TOPMOST = -1, flags = SWP_NOMOVE|SWP_NOSIZE (0x0010|0x0001 = 0x0011)
-$topmostResult = [DesktopWindow]::SetWindowPos($target, [IntPtr](-1), $bx, $by, $bw, $bh, 0x0011)
-Write-Host "[PS] SetWindowPos TOPMOST result: $topmostResult"
-
-# Step 2: Push back to HWND_BOTTOM so it sits behind all other windows.
-# HWND_BOTTOM = 1, flags = SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE (0x0010|0x0001|0x0040 = 0x0051)
-# The TOPMOST registration survives this — Windows keeps it in the topmost
-# band even when z-ordered to the bottom of that band.
-$bottomResult = [DesktopWindow]::SetWindowPos($target, [IntPtr](1), $bx, $by, $bw, $bh, 0x0051)
-Write-Host "[PS] SetWindowPos BOTTOM result: $bottomResult"
-
-# Apply WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST to extended styles
-# so the shell permanently treats this as a non-managed desktop-layer window
-$GWL_EXSTYLE      = -20
-$WS_EX_TOOLWINDOW = 0x00000080
-$WS_EX_NOACTIVATE = 0x08000000
-$WS_EX_TOPMOST    = 0x00000008
-$current = [DesktopWindow]::GetWindowLong($target, $GWL_EXSTYLE)
-Write-Host "[PS] Current ExStyle: $current"
-$newStyle = $current -bor $WS_EX_TOOLWINDOW -bor $WS_EX_NOACTIVATE -bor $WS_EX_TOPMOST
-$setStyleResult = [DesktopWindow]::SetWindowLong($target, $GWL_EXSTYLE, $newStyle)
-Write-Host "[PS] SetWindowLong result: $setStyleResult (new=$newStyle)"
-`;
-
-    const scriptPath = path.join(app.getPath("temp"), `tw-live-${hwnd}.ps1`);
-    console.log(`[attach] Writing PS script to: ${scriptPath}`);
-    fs.writeFileSync(scriptPath, script, "utf-8");
-
-    // SysNative resolves to 64-bit System32 even when Node is 32-bit.
-    // Without this, spawning 'powershell.exe' from a 64-bit Electron process
-    // can land in SysWOW64 (32-bit PS) which cannot see 64-bit windows like Progman.
-    const ps64 = "C:\\Windows\\SysNative\\WindowsPowerShell\\v1.0\\powershell.exe";
-    const psExe = fs.existsSync(ps64) ? ps64 : "powershell.exe";
-    console.log(`[attach] Using PowerShell: ${psExe}`);
-
-    execFile(
-        psExe,
-        [
-            "-NoProfile", "-ExecutionPolicy", "Bypass",
-            "-File", scriptPath,
-            "-hwnd", hwnd,
-            "-bx", String(bounds.x),
-            "-by", String(bounds.y),
-            "-bw", String(bounds.width),
-            "-bh", String(bounds.height)
-        ],
-        { timeout: 15000 },
-        (psErr, stdout, stderr) => {
-            if (stdout) console.log(`[PS stdout]\n${stdout.trim()}`);
-            if (stderr) console.warn(`[PS stderr]\n${stderr.trim()}`);
-            if (psErr) {
-                console.error(`[attach] FAILED for display ${win.liveDisplayId}:`, psErr.message);
-                win.isAttachedToDesktop = false;
-            } else {
-                console.log(`[attach] SUCCESS for display ${win.liveDisplayId}`);
-            }
-        }
-    );
+// ─── Virtual desktop bounds ───────────────────────────────────────────────────
+function getVirtualBounds(displays = screen.getAllDisplays()) {
+    const left   = Math.min(...displays.map(d => d.bounds.x));
+    const top    = Math.min(...displays.map(d => d.bounds.y));
+    const right  = Math.max(...displays.map(d => d.bounds.x + d.bounds.width));
+    const bottom = Math.max(...displays.map(d => d.bounds.y + d.bounds.height));
+    return {
+        x:      Math.round(left),
+        y:      Math.round(top),
+        width:  Math.round(right  - left),
+        height: Math.round(bottom - top),
+    };
 }
 
 // ─── Live wallpaper – maintenance ────────────────────────────────────────────
 function maintainLiveWallpaperWindow(win) {
     if (win.isDestroyed()) return;
 
-    const display     = getDisplayForLiveWindow(win);
-    const bounds      = display.bounds;
-    win.liveDisplayId = display.id;
-
-    const wasMinimized = win.isMinimized();
-    const wasHidden    = !win.isVisible();
-
-    if (wasMinimized) { console.log(`[maintain] display=${win.liveDisplayId} was minimized — restoring`); win.restore(); }
-    if (wasHidden)    { console.log(`[maintain] display=${win.liveDisplayId} was hidden — showing`);      win.showInactive(); }
-
-    win.setBounds(bounds);
+    const display = getDisplayForLiveWindow(win);
+    const bounds = display ? display.bounds : getVirtualBounds();
 
     if (!win.isAttachedToDesktop) {
-        console.log(`[maintain] display=${win.liveDisplayId} not attached — running attach`);
+        win.setBounds(bounds);
+    }
+
+    if (win.isMinimized()) {
+        console.log("[maintain] live window minimized — restoring");
+        win.restore();
+    }
+
+    if (!win.isVisible()) {
+        console.log("[maintain] live window hidden — showing");
+        win.showInactive();
+    }
+
+    if (!win.isAttachedToDesktop) {
+        console.log("[maintain] live window not attached — attaching");
         attachWindowToDesktop(win);
     }
 }
@@ -479,14 +558,29 @@ function stopLiveWallpaperMaintenance() {
     console.log("Live wallpaper maintenance timer stopped.");
 }
 
-// ─── Live wallpaper – window creation ────────────────────────────────────────
+function getDisplayForLiveWindow(win) {
+    const targetId = win?.liveDisplayId;
+    if (!targetId || targetId === "virtual-desktop") return null;
+    return screen.getAllDisplays().find(d => String(d.id) === String(targetId)) || null;
+}
+
+// ─── Live wallpaper – per-display windows ─────────────────────────────────────
+//
+// electron-as-wallpaper only supports ONE WorkerW child window at a time.
+// Attempting to attach a second window kicks out the first. The solution is
+// one BrowserWindow per display, each constrained to the monitor it belongs to.
+// The renderer only receives the local display rect and paints that monitor.
+
 function createLiveWallpaperWindow(display) {
     const bounds = display.bounds;
-    console.log(`Creating live wallpaper window for display ${display.id} bounds=${JSON.stringify(bounds)}`);
+    console.log(`Creating live wallpaper window for display id=${display.id} bounds=${JSON.stringify(bounds)} scale=${display.scaleFactor}`);
 
     const win = new BrowserWindow({
-        x: bounds.x, y: bounds.y,
-        width: bounds.width, height: bounds.height,
+        x:      bounds.x,
+        y:      bounds.y,
+        width:  bounds.width,
+        height: bounds.height,
+        useContentSize: false,
         frame:          false,
         resizable:      false,
         movable:        false,
@@ -496,7 +590,12 @@ function createLiveWallpaperWindow(display) {
         show:           false,
         focusable:      false,
         fullscreenable: false,
-        webPreferences: { nodeIntegration: true, contextIsolation: false, backgroundThrottling: false }
+        transparent:    true,
+        webPreferences: {
+            nodeIntegration:      true,
+            contextIsolation:     false,
+            backgroundThrottling: false,
+        }
     });
 
     win.liveDisplayId       = display.id;
@@ -507,32 +606,20 @@ function createLiveWallpaperWindow(display) {
     win.loadFile("live.html");
 
     win.once("ready-to-show", () => {
-        console.log(`[win event] ready-to-show for display ${win.liveDisplayId}`);
-        maintainLiveWallpaperWindow(win);
-    });
-
-    win.on("show", () => {
-        console.log(`[win event] show for display ${win.liveDisplayId}`);
-    });
-
-    win.on("hide", () => {
-        console.log(`[win event] hide for display ${win.liveDisplayId} — calling showInactive`);
-        win.showInactive();
-    });
-
-    win.on("minimize", event => {
-        console.log(`[win event] minimize for display ${win.liveDisplayId} — preventing and restoring`);
-        event.preventDefault();
-        win.restore();
+        console.log(`[win event] ready-to-show display=${win.liveDisplayId} — affirming bounds and showing`);
+        const b = getDisplayForLiveWindow(win)?.bounds || bounds;
+        win.setBounds(b);
         win.showInactive();
     });
 
     win.on("restore", () => {
-        console.log(`[win event] restore for display ${win.liveDisplayId}`);
+        console.log(`[win event] restore display=${win.liveDisplayId} — resetting attach flag`);
+        win.isAttachedToDesktop = false;
+        setTimeout(() => maintainLiveWallpaperWindow(win), 300);
     });
 
     win.on("closed", () => {
-        console.log(`[win event] closed for display ${win.liveDisplayId}`);
+        console.log("[win event] closed");
         liveWindows = liveWindows.filter(w => w !== win);
         if (liveWindows.length === 0) stopLiveWallpaperMaintenance();
         buildTrayMenu();
@@ -542,12 +629,29 @@ function createLiveWallpaperWindow(display) {
 }
 
 // ─── Live wallpaper – start / stop ───────────────────────────────────────────
-function startLiveWallpaper() {
+
+async function waitForVisibleThenAttach(win) {
+    const deadline = Date.now() + 4000;
+    while (Date.now() < deadline) {
+        if (win.isDestroyed()) return;
+        if (win.isVisible()) {
+            attachWindowToDesktop(win);
+            return;
+        }
+        await wait(100);
+    }
+    console.warn("[attach] window never became visible — skipping");
+}
+
+async function startLiveWallpaper() {
     if (liveWindows.length > 0) { console.log("startLiveWallpaper: already running."); return; }
     console.log("Starting live wallpaper...");
     stopStaticUpdates();
-    liveWindows = screen.getAllDisplays().map(d => createLiveWallpaperWindow(d));
-    console.log(`Created ${liveWindows.length} live window(s).`);
+
+    const displays = getSortedDisplays();
+    liveWindows = displays.map(display => createLiveWallpaperWindow(display));
+
+    await Promise.all(liveWindows.map(waitForVisibleThenAttach));
     startLiveWallpaperMaintenance();
     buildTrayMenu();
 }
@@ -558,7 +662,18 @@ function stopLiveWallpaper() {
     const windowsToClose = [...liveWindows];
     liveWindows = [];
     stopLiveWallpaperMaintenance();
-    windowsToClose.forEach(win => { if (!win.isDestroyed()) win.close(); });
+
+    windowsToClose.forEach(win => {
+        if (win.isDestroyed()) return;
+        try {
+            detach(win);
+            console.log(`[detach] display=${win.liveDisplayId}`);
+        } catch (e) {
+            console.warn(`[detach] failed display=${win.liveDisplayId}:`, e.message);
+        }
+        win.close();
+    });
+
     void runWallpaperUpdate();
     startStaticUpdates();
     buildTrayMenu();
@@ -575,22 +690,25 @@ function restartLiveWallpaperForDisplays() {
     if (liveWindows.length === 0) return;
     console.log("Display change detected — restarting live wallpaper.");
     stopLiveWallpaper();
-    startLiveWallpaper();
+    setTimeout(startLiveWallpaper, 1500);
 }
 
 function reattachLiveWallpaperWindows() {
-    console.log("Power resume/unlock — resetting attachment flags and reattaching.");
+    console.log("Power resume/unlock — resetting attachment flags.");
     liveWindows.forEach(win => {
-        if (!win.isDestroyed()) win.isAttachedToDesktop = false;
+        if (win.isDestroyed()) return;
+        win.isAttachedToDesktop = false;
+        if (!win.isVisible())  win.showInactive();
+        if (win.isMinimized()) win.restore();
     });
-    maintainLiveWallpaperWindows();
+    setTimeout(maintainLiveWallpaperWindows, 800);
 }
 
 // ─── Settings window ──────────────────────────────────────────────────────────
 function openSettings() {
     if (settingsWindow) { settingsWindow.focus(); return; }
     settingsWindow = new BrowserWindow({
-        width: 500, height: 820, resizable: false,
+        width: 520, height: 900, resizable: false,
         title: "Wallpaper Settings",
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
@@ -600,13 +718,37 @@ function openSettings() {
 
 // ─── Tray ─────────────────────────────────────────────────────────────────────
 function buildTrayMenu() {
+    const isLive   = liveWindows.length > 0;
+    const config   = readConfig();
     const template = [
         {
-            label: "Change Background",
+            label: "Change Background Image",
             click: async () => {
                 await getImage();
-                if (liveWindows.length > 0) refreshLiveWallpaper();
+                if (isLive) refreshLiveWallpaper();
                 else await runWallpaperUpdate();
+            }
+        },
+        {
+            label: "Set Video Wallpaper…",
+            click: async () => {
+                const videoPath = await pickVideoWallpaper();
+                if (!videoPath) return;
+                // If live wallpaper is running, restart it so the video takes effect.
+                if (isLive) {
+                    stopLiveWallpaper();
+                    setTimeout(startLiveWallpaper, 800);
+                }
+            }
+        },
+        {
+            label: config.videoEnabled ? "Disable Video Wallpaper" : "Enable Video Wallpaper",
+            click: () => {
+                const cfg = readConfig();
+                cfg.videoEnabled = !cfg.videoEnabled;
+                fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
+                if (isLive) refreshLiveWallpaper();
+                buildTrayMenu();
             }
         },
         { type: "separator" },
@@ -614,11 +756,11 @@ function buildTrayMenu() {
         {
             label: "Reload Wallpaper",
             click: async () => {
-                if (liveWindows.length > 0) refreshLiveWallpaper();
+                if (isLive) refreshLiveWallpaper();
                 else await runWallpaperUpdate();
             }
         },
-        liveWindows.length > 0
+        isLive
             ? { label: "Stop Live Wallpaper",  click: () => stopLiveWallpaper() }
             : { label: "Start Live Wallpaper", click: () => startLiveWallpaper() },
         { type: "separator" }
@@ -657,10 +799,10 @@ function setupAutoUpdater() {
         updateDownloading = true;
         buildTrayMenu();
         if (Notification.isSupported())
-            new Notification({ title: "Time Wallpaper", body: `v${info.version} is downloading in the background.` }).show();
+            new Notification({ title: "Time Wallpaper", body: `v${info.version} is downloading.` }).show();
     });
 
-    autoUpdater.on("download-progress", p => console.log(`Update download: ${Math.round(p.percent)}%`));
+    autoUpdater.on("download-progress", p => console.log(`Update: ${Math.round(p.percent)}%`));
 
     autoUpdater.on("update-downloaded", info => {
         console.log("Update downloaded:", info.version);
@@ -669,7 +811,7 @@ function setupAutoUpdater() {
         if (Notification.isSupported())
             new Notification({
                 title: "Time Wallpaper",
-                body:  `v${info.version} ready – right-click tray icon to restart and install.`
+                body:  `v${info.version} ready — right-click tray to install.`
             }).show();
     });
 
@@ -684,6 +826,8 @@ function setupAutoUpdater() {
     autoUpdater.checkForUpdates().catch(e => console.error("Update check failed:", e));
     setInterval(() => autoUpdater.checkForUpdates().catch(e => console.error(e)), 4 * 60 * 60 * 1000);
 }
+
+app.commandLine.appendSwitch("disable-gpu-compositing");
 
 // ─── App ready ────────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
