@@ -9,7 +9,7 @@
   "dateSize": 40,
   "timeSize": 50,
   "daySpacing": 50,
-  "fontColor": "#f5ebeb",
+  "fontColor": "red",
   "shadowEnabled": true,
   "shadowBlur": 40,
   "shadowColor": "#3e0a0a",
@@ -19,6 +19,7 @@
   "timePrefix": "- ",
   "timeSuffix": " -",
   "hour12": true,
+  "showSeconds": false,
   "interval": 60,
   "canvasWidth": 1920,
   "canvasHeight": 1200

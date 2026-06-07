@@ -17,6 +17,8 @@
             --text: #e8e8f0;
             --muted: #555570;
             --input-bg: #16161f;
+            --live-accent: #ff6a9b;
+            --live-glow: rgba(255,106,155,0.25);
         }
 
         body {
@@ -31,7 +33,7 @@
         }
 
         .header {
-            padding: 20px 24px 16px;
+            padding: 16px 24px 14px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
@@ -67,6 +69,117 @@
             font-family: 'Space Mono', monospace;
         }
 
+        /* ── Mode Switch ── */
+        .mode-bar {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            padding: 10px 24px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .mode-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-right: 14px;
+        }
+
+        .mode-pill {
+            display: flex;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .mode-btn {
+            padding: 6px 18px;
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--muted);
+            cursor: pointer;
+            border: none;
+            background: none;
+            transition: color 0.2s;
+            position: relative;
+            z-index: 1;
+        }
+
+        .mode-btn.active { color: white; }
+
+        .mode-pill-slider {
+            position: absolute;
+            top: 3px; bottom: 3px;
+            border-radius: 14px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .mode-pill[data-mode="static"] .mode-pill-slider {
+            left: 3px;
+            width: calc(50% - 3px);
+            background: var(--accent);
+            box-shadow: 0 0 10px rgba(124,106,255,0.4);
+        }
+
+        .mode-pill[data-mode="live"] .mode-pill-slider {
+            left: calc(50%);
+            width: calc(50% - 3px);
+            background: var(--live-accent);
+            box-shadow: 0 0 10px var(--live-glow);
+        }
+
+        .live-badge {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            margin-left: 12px;
+            padding: 4px 10px;
+            background: rgba(255,106,155,0.1);
+            border: 1px solid rgba(255,106,155,0.3);
+            border-radius: 20px;
+        }
+
+        .live-badge .dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--live-accent);
+            animation: pulse 1.2s infinite;
+        }
+
+        .live-badge span {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 2px;
+            color: var(--live-accent);
+            text-transform: uppercase;
+        }
+
+        body.live-mode .live-badge { display: flex; }
+        body.live-mode .header-dot { background: var(--live-accent); box-shadow: 0 0 12px var(--live-accent); }
+        body.live-mode .tab.active { color: var(--live-accent); border-bottom-color: var(--live-accent); }
+        body.live-mode .field input:focus,
+        body.live-mode .field select:focus { border-color: var(--live-accent); }
+        body.live-mode .color-row:focus-within { border-color: var(--live-accent); }
+        body.live-mode .toggle input:checked + .toggle-slider { background: var(--live-accent); }
+        body.live-mode .anchor-btn.active {
+            background: var(--live-accent);
+            border-color: #ff8fb5;
+            box-shadow: 0 0 8px var(--live-glow);
+        }
+        body.live-mode .btn-save { background: var(--live-accent); }
+        body.live-mode .btn-save:hover { background: #ff8fb5; }
+        body.live-mode .section-label { color: #ff6a9b88; }
+        body.live-mode .toast { background: var(--live-accent); }
+
+        /* ── Tabs ── */
         .tabs {
             display: flex;
             border-bottom: 1px solid var(--border);
@@ -333,6 +446,27 @@
             position: relative;
         }
 
+        /* Mode banner inside preview */
+        .preview-mode-tag {
+            position: absolute;
+            top: 10px; right: 10px;
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: rgba(124,106,255,0.2);
+            color: var(--accent);
+            border: 1px solid rgba(124,106,255,0.3);
+        }
+
+        body.live-mode .preview-mode-tag {
+            background: rgba(255,106,155,0.2);
+            color: var(--live-accent);
+            border-color: rgba(255,106,155,0.3);
+        }
+
         .footer {
             padding: 14px 24px;
             border-top: 1px solid var(--border);
@@ -375,6 +509,7 @@
             opacity: 0;
             transition: all 0.3s;
             pointer-events: none;
+            white-space: nowrap;
         }
 
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -387,6 +522,21 @@
             margin-top: 4px;
             font-family: 'Space Mono', monospace;
         }
+
+        /* Live-only setting highlight */
+        .live-only-note {
+            display: none;
+            font-size: 10px;
+            color: var(--live-accent);
+            font-family: 'Space Mono', monospace;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            padding: 6px 10px;
+            background: rgba(255,106,155,0.06);
+            border: 1px solid rgba(255,106,155,0.2);
+            border-radius: 6px;
+        }
+        body.live-mode .live-only-note { display: block; }
     </style>
 </head>
 <body>
@@ -397,17 +547,33 @@
     <span id="clock">--:--</span>
 </div>
 
+<!-- Mode Switch Bar -->
+<div class="mode-bar">
+    <span class="mode-label">Mode</span>
+    <div class="mode-pill" id="modePill" data-mode="static">
+        <div class="mode-pill-slider"></div>
+        <button class="mode-btn active" id="btnStatic" onclick="switchMode('static')">Static</button>
+        <button class="mode-btn" id="btnLive" onclick="switchMode('live')">Live</button>
+    </div>
+    <div class="live-badge">
+        <div class="dot"></div>
+        <span>Live Active</span>
+    </div>
+</div>
+
 <div class="tabs">
-    <div class="tab active" onclick="switchTab('typography')">Typography</div>
-    <div class="tab" onclick="switchTab('layout')">Layout</div>
-    <div class="tab" onclick="switchTab('style')">Style</div>
-    <div class="tab" onclick="switchTab('preview')">Preview</div>
+    <div class="tab active" onclick="switchTab('typography', event)">Typography</div>
+    <div class="tab" onclick="switchTab('layout', event)">Layout</div>
+    <div class="tab" onclick="switchTab('style', event)">Style</div>
+    <div class="tab" onclick="switchTab('preview', event)">Preview</div>
 </div>
 
 <div class="content">
 
     <!-- TYPOGRAPHY TAB -->
     <div class="tab-panel active" id="tab-typography">
+
+        <div class="live-only-note">⚡ Editing LIVE wallpaper settings — these apply only when the live wallpaper is running.</div>
 
         <div class="section">
             <div class="section-label">Day</div>
@@ -472,6 +638,13 @@
                     <span class="toggle-slider"></span>
                 </label>
             </div>
+            <div class="toggle-row" style="margin-top:6px">
+                <span>Show seconds in live wallpaper</span>
+                <label class="toggle">
+                    <input type="checkbox" id="showSeconds">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
         </div>
 
     </div>
@@ -479,19 +652,21 @@
     <!-- LAYOUT TAB -->
     <div class="tab-panel" id="tab-layout">
 
+        <div class="live-only-note">⚡ Editing LIVE wallpaper settings — these apply only when the live wallpaper is running.</div>
+
         <div class="section">
             <div class="section-label">Clock Position</div>
             <div class="anchor-wrap">
                 <div class="anchor-grid" id="anchorGrid">
-                    <button class="anchor-btn" data-pos="top-left"    title="Top Left">↖</button>
-                    <button class="anchor-btn" data-pos="top-center"  title="Top Center">↑</button>
-                    <button class="anchor-btn" data-pos="top-right"   title="Top Right">↗</button>
-                    <button class="anchor-btn" data-pos="middle-left" title="Middle Left">←</button>
+                    <button class="anchor-btn" data-pos="top-left"      title="Top Left">↖</button>
+                    <button class="anchor-btn" data-pos="top-center"    title="Top Center">↑</button>
+                    <button class="anchor-btn" data-pos="top-right"     title="Top Right">↗</button>
+                    <button class="anchor-btn" data-pos="middle-left"   title="Middle Left">←</button>
                     <button class="anchor-btn" data-pos="middle-center" title="Center">⊙</button>
-                    <button class="anchor-btn" data-pos="middle-right" title="Middle Right">→</button>
-                    <button class="anchor-btn" data-pos="bottom-left"  title="Bottom Left">↙</button>
+                    <button class="anchor-btn" data-pos="middle-right"  title="Middle Right">→</button>
+                    <button class="anchor-btn" data-pos="bottom-left"   title="Bottom Left">↙</button>
                     <button class="anchor-btn" data-pos="bottom-center" title="Bottom Center">↓</button>
-                    <button class="anchor-btn" data-pos="bottom-right" title="Bottom Right">↘</button>
+                    <button class="anchor-btn" data-pos="bottom-right"  title="Bottom Right">↘</button>
                 </div>
                 <span class="anchor-label" id="anchorLabel">CENTER</span>
             </div>
@@ -544,6 +719,8 @@
 
     <!-- STYLE TAB -->
     <div class="tab-panel" id="tab-style">
+
+        <div class="live-only-note">⚡ Editing LIVE wallpaper settings — these apply only when the live wallpaper is running.</div>
 
         <div class="section">
             <div class="section-label">Colors</div>
@@ -599,6 +776,7 @@
         <div class="section">
             <div class="section-label">Live Preview</div>
             <div class="preview">
+                <div class="preview-mode-tag" id="previewModeTag">STATIC</div>
                 <div class="preview-day" id="prev-day">MONDAY</div>
                 <div class="preview-date" id="prev-date">April 21, 2026</div>
                 <div class="preview-time" id="prev-time">- 11:47 PM -</div>
@@ -624,8 +802,31 @@
     const path = require("path");
     const { ipcRenderer } = require("electron");
 
-    let config = {};
+    // ── Defaults ──────────────────────────────────────────────────────────────────
+    const STATIC_DEFAULTS = {
+        clockAnchor: "middle-center", clockOffsetX: 0, clockOffsetY: 0,
+        dayY: -270, dateY: -170, timeY: -80,
+        daySize: 110, dateSize: 45, timeSize: 50, daySpacing: 10,
+        fontColor: "#ffffff", shadowEnabled: true, shadowBlur: 40, shadowColor: "#000000",
+        dayFont: "Anurati", dateFont: "Rajdhani", timeFont: "Rajdhani",
+        timePrefix: "- ", timeSuffix: " -", hour12: true, showSeconds: false,
+        interval: 60, canvasWidth: 1920, canvasHeight: 1200
+    };
+
+    const LIVE_DEFAULTS = {
+        clockAnchor: "middle-center", clockOffsetX: 0, clockOffsetY: 0,
+        dayY: -270, dateY: -170, timeY: -80,
+        daySize: 90, dateSize: 40, timeSize: 50, daySpacing: 50,
+        fontColor: "#f5ebeb", shadowEnabled: true, shadowBlur: 40, shadowColor: "#3e0a0a",
+        dayFont: "Anurati", dateFont: "Rajdhani", timeFont: "Rajdhani",
+        timePrefix: "- ", timeSuffix: " -", hour12: true, showSeconds: false,
+        interval: 60, canvasWidth: 1920, canvasHeight: 1200
+    };
+
+    // ── State ─────────────────────────────────────────────────────────────────────
+    let fullConfig   = {};   // entire config.json
     let configPath;
+    let currentMode   = "static";   // "static" | "live"
     let currentAnchor = "middle-center";
 
     const anchorLabels = {
@@ -634,7 +835,35 @@
         "bottom-left": "BOTTOM LEFT", "bottom-center": "BOTTOM CENTER", "bottom-right": "BOTTOM RIGHT"
     };
 
-    // Anchor grid click handler
+    // ── Mode switch ───────────────────────────────────────────────────────────────
+    function switchMode(mode) {
+        // Save current fields into the right config section before switching
+        if (configPath) flushFieldsToConfig();
+
+        currentMode = mode;
+        document.getElementById("modePill").dataset.mode = mode;
+        document.getElementById("btnStatic").classList.toggle("active", mode === "static");
+        document.getElementById("btnLive").classList.toggle("active", mode === "live");
+        document.body.classList.toggle("live-mode", mode === "live");
+        document.getElementById("previewModeTag").textContent = mode === "live" ? "LIVE" : "STATIC";
+
+        const cfg = modeConfig();
+        populateFields(cfg);
+        updatePreview();
+    }
+
+    // Return the sub-config object for the current mode (mutates fullConfig in place)
+    function modeConfig() {
+        if (currentMode === "live") {
+            if (!fullConfig.live) fullConfig.live = { ...LIVE_DEFAULTS };
+            return fullConfig.live;
+        } else {
+            // Static settings live at the top level (legacy compatible)
+            return fullConfig;
+        }
+    }
+
+    // ── Anchor grid ───────────────────────────────────────────────────────────────
     document.getElementById("anchorGrid").addEventListener("click", (e) => {
         const btn = e.target.closest(".anchor-btn");
         if (!btn) return;
@@ -652,108 +881,104 @@
         document.getElementById("anchorLabel").textContent = anchorLabels[currentAnchor] || currentAnchor.toUpperCase();
     }
 
+    // ── Populate form fields from a config object ─────────────────────────────────
+    function populateFields(cfg) {
+        const D = currentMode === "live" ? LIVE_DEFAULTS : STATIC_DEFAULTS;
+
+        document.getElementById("dayFont").value    = cfg.dayFont    || D.dayFont;
+        document.getElementById("daySize").value    = cfg.daySize    ?? D.daySize;
+        document.getElementById("daySpacing").value = Number(cfg.daySpacing ?? D.daySpacing);
+        document.getElementById("dayY").value       = cfg.dayY       ?? D.dayY;
+
+        document.getElementById("dateFont").value   = cfg.dateFont   || D.dateFont;
+        document.getElementById("dateSize").value   = cfg.dateSize   ?? D.dateSize;
+        document.getElementById("dateY").value      = cfg.dateY      ?? D.dateY;
+
+        document.getElementById("timeFont").value   = cfg.timeFont   || D.timeFont;
+        document.getElementById("timeSize").value   = cfg.timeSize   ?? D.timeSize;
+        document.getElementById("timeY").value      = cfg.timeY      ?? D.timeY;
+        document.getElementById("timePrefix").value = cfg.timePrefix ?? D.timePrefix;
+        document.getElementById("timeSuffix").value = cfg.timeSuffix ?? D.timeSuffix;
+        document.getElementById("hour12").checked      = cfg.hour12      !== false;
+        document.getElementById("showSeconds").checked = cfg.showSeconds === true;
+
+        setAnchor(cfg.clockAnchor || D.clockAnchor);
+        document.getElementById("clockOffsetX").value = cfg.clockOffsetX ?? D.clockOffsetX;
+        document.getElementById("clockOffsetY").value = cfg.clockOffsetY ?? D.clockOffsetY;
+        document.getElementById("canvasWidth").value  = cfg.canvasWidth  || D.canvasWidth;
+        document.getElementById("canvasHeight").value = cfg.canvasHeight || D.canvasHeight;
+
+        const fc = cfg.fontColor   || D.fontColor;
+        const sc = cfg.shadowColor || D.shadowColor;
+        document.getElementById("fontColor").value        = fc;
+        document.getElementById("fontColorPicker").value  = toHex(fc);
+        document.getElementById("shadowColor").value      = sc;
+        document.getElementById("shadowColorPicker").value = toHex(sc);
+        document.getElementById("shadowToggle").checked   = cfg.shadowEnabled !== false;
+        document.getElementById("shadowBlur").value       = cfg.shadowBlur ?? D.shadowBlur;
+        document.getElementById("interval").value         = cfg.interval    ?? D.interval;
+    }
+
+    // ── Read form fields into the current mode's config object ────────────────────
+    function flushFieldsToConfig() {
+        const cfg = modeConfig();
+
+        cfg.clockAnchor  = currentAnchor;
+        cfg.clockOffsetX = parseInt(document.getElementById("clockOffsetX").value) || 0;
+        cfg.clockOffsetY = parseInt(document.getElementById("clockOffsetY").value) || 0;
+
+        cfg.dayFont    = document.getElementById("dayFont").value;
+        cfg.daySize    = parseInt(document.getElementById("daySize").value);
+        cfg.daySpacing = parseInt(document.getElementById("daySpacing").value) || 0;
+        cfg.dayY       = parseInt(document.getElementById("dayY").value);
+
+        cfg.dateFont = document.getElementById("dateFont").value;
+        cfg.dateSize = parseInt(document.getElementById("dateSize").value);
+        cfg.dateY    = parseInt(document.getElementById("dateY").value);
+
+        cfg.timeFont   = document.getElementById("timeFont").value;
+        cfg.timeSize   = parseInt(document.getElementById("timeSize").value);
+        cfg.timeY      = parseInt(document.getElementById("timeY").value);
+        cfg.timePrefix = document.getElementById("timePrefix").value;
+        cfg.timeSuffix = document.getElementById("timeSuffix").value;
+        cfg.hour12     = document.getElementById("hour12").checked;
+        cfg.showSeconds = document.getElementById("showSeconds").checked;
+        delete cfg.seconds;
+
+        cfg.fontColor     = document.getElementById("fontColor").value;
+        cfg.shadowEnabled = document.getElementById("shadowToggle").checked;
+        cfg.shadowColor   = document.getElementById("shadowColor").value;
+        cfg.shadowBlur    = parseInt(document.getElementById("shadowBlur").value);
+        cfg.interval      = Math.max(1, parseInt(document.getElementById("interval").value) || 60);
+
+        cfg.canvasWidth  = parseInt(document.getElementById("canvasWidth").value);
+        cfg.canvasHeight = parseInt(document.getElementById("canvasHeight").value);
+    }
+
+    // ── Load config from disk ─────────────────────────────────────────────────────
     async function loadConfig() {
         const userDataPath = await ipcRenderer.invoke("get-user-data-path");
         configPath = path.join(userDataPath, "config.json");
 
         try {
-            config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+            fullConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
         } catch (e) {
-            config = {};
+            fullConfig = {};
         }
 
-        // Typography
-        document.getElementById("dayFont").value = config.dayFont || "Anurati";
-        document.getElementById("daySize").value = config.daySize || 110;
-        document.getElementById("daySpacing").value = Number(config.daySpacing ?? 10);
-        document.getElementById("dayY").value = config.dayY ?? -270;
+        // Ensure live sub-object exists with defaults if not present
+        if (!fullConfig.live) fullConfig.live = { ...LIVE_DEFAULTS };
 
-        document.getElementById("dateFont").value = config.dateFont || "Rajdhani";
-        document.getElementById("dateSize").value = config.dateSize || 45;
-        document.getElementById("dateY").value = config.dateY ?? -170;
-
-        document.getElementById("timeFont").value = config.timeFont || "Rajdhani";
-        document.getElementById("timeSize").value = config.timeSize || 50;
-        document.getElementById("timeY").value = config.timeY ?? -80;
-        document.getElementById("timePrefix").value = config.timePrefix ?? "- ";
-        document.getElementById("timeSuffix").value = config.timeSuffix ?? " -";
-        document.getElementById("hour12").checked = config.hour12 !== false;
-
-        // Layout
-        setAnchor(config.clockAnchor || "middle-center");
-        document.getElementById("clockOffsetX").value = config.clockOffsetX ?? 0;
-        document.getElementById("clockOffsetY").value = config.clockOffsetY ?? 0;
-        document.getElementById("canvasWidth").value = config.canvasWidth || 1920;
-        document.getElementById("canvasHeight").value = config.canvasHeight || 1200;
-
-        // Style
-        document.getElementById("fontColor").value = config.fontColor || "#ffffff";
-        document.getElementById("fontColorPicker").value = toHex(config.fontColor || "#ffffff");
-        document.getElementById("shadowColor").value = config.shadowColor || "#000000";
-        document.getElementById("shadowColorPicker").value = toHex(config.shadowColor || "#000000");
-        document.getElementById("shadowToggle").checked = config.shadowEnabled !== false;
-        document.getElementById("shadowBlur").value = config.shadowBlur ?? 40;
-        document.getElementById("interval").value = config.interval ?? 60;
-
+        populateFields(modeConfig());
         updatePreview();
     }
 
-    function toHex(color) {
-        if (!color) return "#ffffff";
-        if (color.startsWith("#")) return color;
-        if (color === "white") return "#ffffff";
-        if (color === "black") return "#000000";
-        return "#ffffff";
-    }
-
-    // Color picker sync
-    document.getElementById("fontColorPicker").addEventListener("input", (e) => {
-        document.getElementById("fontColor").value = e.target.value;
-    });
-    document.getElementById("shadowColorPicker").addEventListener("input", (e) => {
-        document.getElementById("shadowColor").value = e.target.value;
-    });
-    document.getElementById("fontColor").addEventListener("input", (e) => {
-        if (e.target.value.startsWith("#")) document.getElementById("fontColorPicker").value = e.target.value;
-    });
-    document.getElementById("shadowColor").addEventListener("input", (e) => {
-        if (e.target.value.startsWith("#")) document.getElementById("shadowColorPicker").value = e.target.value;
-    });
-
+    // ── Save ──────────────────────────────────────────────────────────────────────
     function save() {
-        config.clockAnchor = currentAnchor;
-        config.clockOffsetX = parseInt(document.getElementById("clockOffsetX").value) || 0;
-        config.clockOffsetY = parseInt(document.getElementById("clockOffsetY").value) || 0;
-
-        config.dayFont = document.getElementById("dayFont").value;
-        config.daySize = parseInt(document.getElementById("daySize").value);
-        config.daySpacing = parseInt(document.getElementById("daySpacing").value) || 0;
-        config.dayY = parseInt(document.getElementById("dayY").value);
-
-        config.dateFont = document.getElementById("dateFont").value;
-        config.dateSize = parseInt(document.getElementById("dateSize").value);
-        config.dateY = parseInt(document.getElementById("dateY").value);
-
-        config.timeFont = document.getElementById("timeFont").value;
-        config.timeSize = parseInt(document.getElementById("timeSize").value);
-        config.timeY = parseInt(document.getElementById("timeY").value);
-        config.timePrefix = document.getElementById("timePrefix").value;
-        config.timeSuffix = document.getElementById("timeSuffix").value;
-        config.hour12 = document.getElementById("hour12").checked;
-        delete config.seconds;
-
-        config.fontColor = document.getElementById("fontColor").value;
-        config.shadowEnabled = document.getElementById("shadowToggle").checked;
-        config.shadowColor = document.getElementById("shadowColor").value;
-        config.shadowBlur = parseInt(document.getElementById("shadowBlur").value);
-        config.interval = Math.max(1, parseInt(document.getElementById("interval").value) || 60);
-
-        config.canvasWidth = parseInt(document.getElementById("canvasWidth").value);
-        config.canvasHeight = parseInt(document.getElementById("canvasHeight").value);
-
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        flushFieldsToConfig();
+        fs.writeFileSync(configPath, JSON.stringify(fullConfig, null, 2));
         ipcRenderer.send("settings-updated");
-        showToast("Settings saved!");
+        showToast(currentMode === "live" ? "Live settings saved!" : "Settings saved!");
         updatePreview();
     }
 
@@ -763,6 +988,36 @@
         showToast("Reloading wallpaper...");
     }
 
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+    function toHex(color) {
+        if (!color) return "#ffffff";
+        if (color.startsWith("#")) return color.length === 4
+            ? "#" + [...color.slice(1)].map(c => c+c).join("") : color;
+        if (color === "white") return "#ffffff";
+        if (color === "black") return "#000000";
+        return "#ffffff";
+    }
+
+    // Color picker sync
+    document.getElementById("fontColorPicker").addEventListener("input", (e) => {
+        document.getElementById("fontColor").value = e.target.value;
+        updatePreview();
+    });
+    document.getElementById("shadowColorPicker").addEventListener("input", (e) => {
+        document.getElementById("shadowColor").value = e.target.value;
+    });
+    document.getElementById("fontColor").addEventListener("input", (e) => {
+        if (e.target.value.startsWith("#")) document.getElementById("fontColorPicker").value = toHex(e.target.value);
+        updatePreview();
+    });
+    document.getElementById("shadowColor").addEventListener("input", (e) => {
+        if (e.target.value.startsWith("#")) document.getElementById("shadowColorPicker").value = toHex(e.target.value);
+    });
+    document.getElementById("hour12").addEventListener("change", updatePreview);
+    document.getElementById("showSeconds").addEventListener("change", updatePreview);
+    document.getElementById("timePrefix").addEventListener("input", updatePreview);
+    document.getElementById("timeSuffix").addEventListener("input", updatePreview);
+
     function showToast(msg) {
         const t = document.getElementById("toast");
         t.textContent = msg;
@@ -770,7 +1025,7 @@
         setTimeout(() => t.classList.remove("show"), 2500);
     }
 
-    function switchTab(name) {
+    function switchTab(name, event) {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
         event.target.classList.add("active");
@@ -780,18 +1035,20 @@
 
     function updatePreview() {
         const now = new Date();
-        const day = now.toLocaleDateString("en-US", { weekday: "long" });
+        const day  = now.toLocaleDateString("en-US", { weekday: "long" });
         const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-        const time = now.toLocaleTimeString("en-US", {
+        const timeOpts = {
             hour: "2-digit", minute: "2-digit",
             hour12: document.getElementById("hour12").checked
-        });
+        };
+        if (document.getElementById("showSeconds").checked) timeOpts.second = "2-digit";
+        const time   = now.toLocaleTimeString("en-US", timeOpts);
         const prefix = document.getElementById("timePrefix").value;
         const suffix = document.getElementById("timeSuffix").value;
-        const color = document.getElementById("fontColor").value;
+        const color  = document.getElementById("fontColor").value || "#ffffff";
 
-        document.getElementById("prev-day").textContent = day.toUpperCase();
-        document.getElementById("prev-day").style.color = color;
+        document.getElementById("prev-day").textContent  = day.toUpperCase();
+        document.getElementById("prev-day").style.color  = color;
         document.getElementById("prev-date").textContent = date;
         document.getElementById("prev-date").style.color = color;
         document.getElementById("prev-time").textContent = prefix + time + suffix;

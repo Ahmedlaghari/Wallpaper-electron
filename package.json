@@ -1,16 +1,16 @@
 {
-  "name": "time-wallpaper",
-  "version": "1.0.2",
-  "description": "Time Wallpaper App",
-  "author": "Your Name",
+  "name": "live-wallpaper",
+  "version": "1.0.4",
+  "description": "live wallapaper",
+  "author": "Ahmed Ali Laghari",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder"
   },
   "build": {
-    "appId": "Laghari Brothers",
-    "productName": "Time Wallpaper",
+    "appId": "com.lagharibrothers.livewallpaper",
+    "productName": "Live Wallpaper",
     "npmRebuild": true,
     "nodeGypRebuild": false,
     "extraResources": [
@@ -22,7 +22,7 @@
     "win": {
       "target": "nsis",
       "icon": "icon.ico",
-      "artifactName": "Time-Wallpaper-Setup-${version}.${ext}"
+      "artifactName": "Live-Wallpaper-Setup-${version}.${ext}"
     },
     "nsis": {
       "include": "installer.nsh"
@@ -56,6 +56,7 @@
   },
   "dependencies": {
     "canvas": "^3.2.1",
+    "electron-as-wallpaper": "^2.0.3",
     "electron-updater": "^6.8.3",
     "sharp": "^0.34.5",
     "wallpaper": "^7.2.1"
