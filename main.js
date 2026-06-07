@@ -73,7 +73,7 @@ function ensureConfigExists() {
         timePrefix: "- ",
         timeSuffix: " -",
         hour12:     true,
-        showSeconds: false,   // live wallpaper only — shows HH:MM:SS when true
+        showSeconds: false,
 
         // Clock style
         fontColor:     "white",
@@ -89,7 +89,7 @@ function ensureConfigExists() {
         // Video wallpaper
         videoEnabled: false,
         videoPath:    "",
-        videoVolume:  0,        // 0 = muted by default (system audio courtesy)
+        videoVolume:  0,
         videoLoop:    true,
     };
     fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
@@ -143,11 +143,6 @@ async function setWindowsPerMonitorWallpapers(imagePaths) {
         .map(filePath => `'${filePath.replace(/'/g, "''")}'`)
         .join(",");
 
-    // Use Activator.CreateInstance with the DesktopWallpaper CLSID and then
-    // Marshal.GetTypedObjectForIUnknown to get the typed interface pointer.
-    // The direct cast  [IDesktopWallpaper](New-Object DesktopWallpaper)  fails
-    // on PowerShell 7+ / .NET 5+ because the CLR no longer allows implicit
-    // COM-interop casts across assembly boundaries.
     const script = `
 Add-Type -TypeDefinition @"
 using System;
@@ -200,14 +195,14 @@ public static class WallpaperHelper {
 }
 "@ -ErrorAction Stop
 
-$wallpaper = [WallpaperHelper]::Create()
-$wallpaper.SetPosition([DesktopWallpaperPosition]::Fill)
-$paths = @(${powerShellPaths})
-$count = [int]$wallpaper.GetMonitorDevicePathCount()
-for ($i = 0; $i -lt $count; $i++) {
-    $monitorId = $wallpaper.GetMonitorDevicePathAt([uint32]$i)
-    $imagePath = $paths[[Math]::Min($i, $paths.Length - 1)]
-    $wallpaper.SetWallpaper($monitorId, $imagePath)
+\$wallpaper = [WallpaperHelper]::Create()
+\$wallpaper.SetPosition([DesktopWallpaperPosition]::Fill)
+\$paths = @(${powerShellPaths})
+\$count = [int]\$wallpaper.GetMonitorDevicePathCount()
+for (\$i = 0; \$i -lt \$count; \$i++) {
+    \$monitorId = \$wallpaper.GetMonitorDevicePathAt([uint32]\$i)
+    \$imagePath = \$paths[[Math]::Min(\$i, \$paths.Length - 1)]
+    \$wallpaper.SetWallpaper(\$monitorId, \$imagePath)
 }
 `;
     await execFileAsync("powershell.exe", [
@@ -385,8 +380,6 @@ async function getImage() {
     }
 }
 
-// Opens a file picker for video, writes the path into config.videoPath
-// and enables videoEnabled.
 async function pickVideoWallpaper() {
     const result = await dialog.showOpenDialog({
         title: "Select Video Wallpaper",
@@ -484,19 +477,11 @@ function attachWindowToDesktop(win) {
 }
 
 // ─── Display helpers ──────────────────────────────────────────────────────────
-// Returns displays sorted LEFT-TO-RIGHT by their X position.
-//
-// Windows WorkerW assigns child-window slots in physical left-to-right order,
-// NOT by which display is "primary". Sorting by bounds.x matches that order,
-// which is the only way attach() lands each window on the correct monitor when
-// running extended (non-duplicate) displays.
-//
-// Tie-break by Y (top-to-bottom) for vertically stacked monitors.
+// Returns ONLY the primary display as a single-element array.
+// This restricts the live wallpaper to the main monitor only.
 function getSortedDisplays() {
-    return screen.getAllDisplays().slice().sort((a, b) => {
-        if (a.bounds.x !== b.bounds.x) return a.bounds.x - b.bounds.x;
-        return a.bounds.y - b.bounds.y;
-    });
+    const primary = screen.getPrimaryDisplay();
+    return [primary];
 }
 
 // ─── Virtual desktop bounds ───────────────────────────────────────────────────
@@ -565,12 +550,6 @@ function getDisplayForLiveWindow(win) {
 }
 
 // ─── Live wallpaper – per-display windows ─────────────────────────────────────
-//
-// electron-as-wallpaper only supports ONE WorkerW child window at a time.
-// Attempting to attach a second window kicks out the first. The solution is
-// one BrowserWindow per display, each constrained to the monitor it belongs to.
-// The renderer only receives the local display rect and paints that monitor.
-
 function createLiveWallpaperWindow(display) {
     const bounds = display.bounds;
     console.log(`Creating live wallpaper window for display id=${display.id} bounds=${JSON.stringify(bounds)} scale=${display.scaleFactor}`);
@@ -734,7 +713,6 @@ function buildTrayMenu() {
             click: async () => {
                 const videoPath = await pickVideoWallpaper();
                 if (!videoPath) return;
-                // If live wallpaper is running, restart it so the video takes effect.
                 if (isLive) {
                     stopLiveWallpaper();
                     setTimeout(startLiveWallpaper, 800);
@@ -799,7 +777,7 @@ function setupAutoUpdater() {
         updateDownloading = true;
         buildTrayMenu();
         if (Notification.isSupported())
-            new Notification({ title: "Time Wallpaper", body: `v${info.version} is downloading.` }).show();
+            new Notification({ title: "Live Wallpaper", body: `v${info.version} is downloading.` }).show();
     });
 
     autoUpdater.on("download-progress", p => console.log(`Update: ${Math.round(p.percent)}%`));
@@ -810,7 +788,7 @@ function setupAutoUpdater() {
         buildTrayMenu();
         if (Notification.isSupported())
             new Notification({
-                title: "Time Wallpaper",
+                title: "Live Wallpaper",
                 body:  `v${info.version} ready — right-click tray to install.`
             }).show();
     });
@@ -820,7 +798,7 @@ function setupAutoUpdater() {
         updateDownloading = false;
         buildTrayMenu();
         if (Notification.isSupported())
-            new Notification({ title: "Time Wallpaper update failed", body: e.message || "Could not download update." }).show();
+            new Notification({ title: "Live Wallpaper update failed", body: e.message || "Could not download update." }).show();
     });
 
     autoUpdater.checkForUpdates().catch(e => console.error("Update check failed:", e));
@@ -835,7 +813,7 @@ app.whenReady().then(async () => {
     ensureConfigExists();
 
     tray = new Tray(path.join(__dirname, "icon.png"));
-    tray.setToolTip("Time Wallpaper");
+    tray.setToolTip("Live Wallpaper");
     buildTrayMenu();
     console.log("Tray created.");
 
