@@ -138,10 +138,17 @@ function drawImageCover(ctx, image, x, y, width, height) {
     ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
 }
 
-async function setWindowsPerMonitorWallpapers(imagePaths) {
-    const powerShellPaths = imagePaths
-        .map(filePath => `'${filePath.replace(/'/g, "''")}'`)
-        .join(",");
+async function setWindowsPerMonitorWallpapers(monitorMap) {
+    // monitorMap: array of { bounds: {x,y,w,h}, imagePath }
+    // We pass the data as JSON so PowerShell can match each monitor by its
+    // physical rect (from GetMonitorRECT) instead of assuming left-to-right order.
+    const monitorMapJson = JSON.stringify(
+        monitorMap.map(m => ({
+            x: m.bounds.x, y: m.bounds.y,
+            w: m.bounds.w, h: m.bounds.h,
+            path: m.imagePath
+        }))
+    ).replace(/'/g, "''");
 
     const script = `
 Add-Type -TypeDefinition @"
@@ -197,12 +204,31 @@ public static class WallpaperHelper {
 
 \$wallpaper = [WallpaperHelper]::Create()
 \$wallpaper.SetPosition([DesktopWallpaperPosition]::Fill)
-\$paths = @(${powerShellPaths})
+
+# Parse the monitor map passed from Node
+\$monitorMap = '${monitorMapJson}' | ConvertFrom-Json
 \$count = [int]\$wallpaper.GetMonitorDevicePathCount()
+
 for (\$i = 0; \$i -lt \$count; \$i++) {
     \$monitorId = \$wallpaper.GetMonitorDevicePathAt([uint32]\$i)
-    \$imagePath = \$paths[[Math]::Min(\$i, \$paths.Length - 1)]
-    \$wallpaper.SetWallpaper(\$monitorId, \$imagePath)
+    \$rect = New-Object WallRect
+    \$wallpaper.GetMonitorRECT(\$monitorId, [ref]\$rect)
+
+    # Find the matching entry in our map by comparing physical bounds.
+    # A tolerance of 8px handles any DPI rounding between Electron and Windows.
+    \$match = \$monitorMap | Where-Object {
+        [Math]::Abs(\$_.x - \$rect.Left)   -le 8 -and
+        [Math]::Abs(\$_.y - \$rect.Top)    -le 8 -and
+        [Math]::Abs(\$_.w - (\$rect.Right  - \$rect.Left)) -le 8 -and
+        [Math]::Abs(\$_.h - (\$rect.Bottom - \$rect.Top))  -le 8
+    } | Select-Object -First 1
+
+    if (\$match) {
+        Write-Host "Monitor \$i (\$(\$rect.Left),\$(\$rect.Top)) -> \$(\$match.path)"
+        \$wallpaper.SetWallpaper(\$monitorId, \$match.path)
+    } else {
+        Write-Host "Monitor \$i (\$(\$rect.Left),\$(\$rect.Top)) -> no match, skipping"
+    }
 }
 `;
     await execFileAsync("powershell.exe", [
@@ -228,8 +254,9 @@ async function generateWallpaper() {
     }
 
     wallpaperWriteIndex = (wallpaperWriteIndex + 1) % 2;
-    const displays  = getSortedDisplays();
-    const outputPaths = [];
+    const displays   = getSortedDisplays();
+    const monitorMap = [];   // { bounds, imagePath } — used by Windows path
+    const outputPaths = [];  // ordered list — used by macOS/Linux path
 
     for (let i = 0; i < displays.length; i++) {
         const display     = displays[i];
@@ -239,7 +266,8 @@ async function generateWallpaper() {
 
         console.log(
             `Static wallpaper display ${display.id}: ${width}x${height} physical px ` +
-            `(logical=${display.bounds.width}x${display.bounds.height}, scale=${scaleFactor})`
+            `(logical=${display.bounds.width}x${display.bounds.height}, scale=${scaleFactor}) ` +
+            `origin=(${display.bounds.x},${display.bounds.y})`
         );
 
         const canvas = createCanvas(width, height);
@@ -252,11 +280,24 @@ async function generateWallpaper() {
         fs.writeFileSync(tmpPath, canvas.toBuffer("image/jpeg", { quality: 0.95 }));
         fs.renameSync(tmpPath, filePath);
         outputPaths.push(filePath);
+
+        // Store the logical bounds (x/y/w/h) so PowerShell can match this image
+        // to the correct monitor via GetMonitorRECT, regardless of physical order.
+        monitorMap.push({
+            bounds: {
+                x: display.bounds.x,
+                y: display.bounds.y,
+                w: display.bounds.width,
+                h: display.bounds.height,
+            },
+            imagePath: filePath,
+        });
+
         console.log("Wallpaper written to", filePath);
     }
 
     if (process.platform === "win32") {
-        await setWindowsPerMonitorWallpapers(outputPaths);
+        await setWindowsPerMonitorWallpapers(monitorMap);
     } else if (process.platform === "darwin") {
         await Promise.all(outputPaths.map((fp, i) => setDesktopWallpaper(fp, { screen: i, scale: "fill" })));
     } else {
