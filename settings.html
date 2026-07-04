@@ -423,7 +423,7 @@
 <!-- Monitor disclaimer -->
 <div class="monitor-disclaimer">
     <span class="icon">⚠️</span>
-    <p>Works on the primary (leftmost) monitor only. If your main display is not on the left, Windows may apply the wallpaper to the wrong screen — this is a known limitation.</p>
+    <p>Live wallpaper spans all connected monitors. If a monitor is added or removed, the wallpaper restarts automatically to fit the new layout.</p>
 </div>
 
 <div class="tabs">
@@ -770,6 +770,10 @@
 
     // ── Save ──────────────────────────────────────────────────────────────────────
     function save() {
+        // Re-read from disk first: the main process may have changed keys we
+        // don't edit here (videoEnabled, liveEnabled, …) since the window opened.
+        try { fullConfig = JSON.parse(fs.readFileSync(configPath, "utf-8")); }
+        catch (e) { /* keep in-memory copy */ }
         flushFieldsToConfig();
         fs.writeFileSync(configPath, JSON.stringify(fullConfig, null, 2));
         ipcRenderer.send("settings-updated");

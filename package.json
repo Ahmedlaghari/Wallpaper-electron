@@ -1,6 +1,6 @@
 {
   "name": "live-wallpaper",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "live wallapaper",
   "author": "Ahmed Ali Laghari",
   "main": "main.js",
@@ -15,13 +15,13 @@
     "nodeGypRebuild": false,
     "extraResources": [
       {
-        "from": "assets/fonts",
+        "from": "fonts",
         "to": "fonts"
       }
     ],
     "win": {
       "target": "nsis",
-      "icon": "icon.ico",
+      "icon": "icon.png",
       "artifactName": "Live-Wallpaper-Setup-${version}.${ext}"
     },
     "nsis": {
@@ -33,22 +33,6 @@
       "repo": "Wallpaper-electron"
     }
   },
-  "files": [
-    "**/*",
-    "!node_modules/.cache",
-    "config.json",
-    "icon.png"
-  ],
-  "asarUnpack": [
-    "**/*.node",
-    "node_modules/canvas/**",
-    "node_modules/wallpaper/**",
-    "node_modules/bindings/**",
-    "node_modules/@napi-rs/**",
-    "config.json",
-    "icon.png",
-    "fonts"
-  ],
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
     "electron": "^40.6.1",

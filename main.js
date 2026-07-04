@@ -45,6 +45,18 @@ function readBackgroundPath() {
     catch { return ""; }
 }
 
+function writeConfig(config) {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+// Packaged builds ship fonts via extraResources (resources/fonts);
+// in development they live next to the sources.
+function getFontsDir() {
+    return app.isPackaged
+        ? path.join(process.resourcesPath, "fonts")
+        : path.join(__dirname, "fonts");
+}
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 function ensureConfigExists() {
     if (fs.existsSync(configPath)) return;
@@ -91,6 +103,9 @@ function ensureConfigExists() {
         videoPath:    "",
         videoVolume:  0,
         videoLoop:    true,
+
+        // Live wallpaper (persisted so it survives app restarts)
+        liveEnabled: false,
     };
     fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
     console.log("Created default config at", configPath);
@@ -243,6 +258,11 @@ async function generateWallpaper() {
 
     if (!selectedImagePath) {
         console.log("No background image selected — skipping wallpaper generation.");
+        return;
+    }
+
+    if (!fs.existsSync(selectedImagePath)) {
+        console.warn("Background image no longer exists — skipping wallpaper generation:", selectedImagePath);
         return;
     }
 
@@ -439,9 +459,7 @@ async function pickVideoWallpaper() {
 
 // ─── Live wallpaper data ──────────────────────────────────────────────────────
 function getLiveWallpaperData(sender = null) {
-    const fontsDir = app.isPackaged
-        ? path.join(process.resourcesPath, "app.asar.unpacked", "fonts")
-        : path.join(__dirname, "fonts");
+    const fontsDir = getFontsDir();
 
     const allDisplays = getSortedDisplays();
     const virtualBounds = getVirtualBounds(allDisplays);
@@ -510,6 +528,12 @@ function attachWindowToDesktop(win) {
     try {
         attach(win, { transparent: true });
         win.isAttachedToDesktop = true;
+        // SetParent reinterprets the window's coordinates relative to WorkerW's
+        // client area, whose origin is the virtual screen's top-left — which is
+        // negative when a monitor sits left of/above the primary.  Re-apply the
+        // bounds in WorkerW-relative coordinates or the window lands shifted by
+        // one monitor.
+        win.setBounds(toWorkerWRelativeBounds(getTargetBoundsForLiveWindow(win)));
         console.log(`[attach] SUCCESS display=${win.liveDisplayId}`);
     } catch (e) {
         console.error(`[attach] FAILED display=${win.liveDisplayId}:`, e.message);
@@ -518,11 +542,8 @@ function attachWindowToDesktop(win) {
 }
 
 // ─── Display helpers ──────────────────────────────────────────────────────────
-// Returns ONLY the primary display as a single-element array.
-// This restricts the live wallpaper to the main monitor only.
 function getSortedDisplays() {
-    const primary = screen.getPrimaryDisplay();
-    return [primary];
+    return screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y);
 }
 
 // ─── Virtual desktop bounds ───────────────────────────────────────────────────
@@ -540,14 +561,40 @@ function getVirtualBounds(displays = screen.getAllDisplays()) {
 }
 
 // ─── Live wallpaper – maintenance ────────────────────────────────────────────
+function getTargetBoundsForLiveWindow(win) {
+    const display = getDisplayForLiveWindow(win);
+    return display ? display.bounds : getVirtualBounds();
+}
+
+// Once a window is parented into WorkerW, SetWindowPos coordinates are
+// relative to WorkerW's client area (origin = virtual screen top-left),
+// not the screen.  Translate screen bounds accordingly.
+function toWorkerWRelativeBounds(bounds) {
+    const virtual = getVirtualBounds();
+    return {
+        x:      bounds.x - virtual.x,
+        y:      bounds.y - virtual.y,
+        width:  bounds.width,
+        height: bounds.height,
+    };
+}
+
 function maintainLiveWallpaperWindow(win) {
     if (win.isDestroyed()) return;
 
-    const display = getDisplayForLiveWindow(win);
-    const bounds = display ? display.bounds : getVirtualBounds();
+    // win.getBounds() reports screen coordinates even after reparenting,
+    // so compare against the screen-space target to detect drift.
+    const target  = getTargetBoundsForLiveWindow(win);
+    const current = win.getBounds();
+    const drifted =
+        Math.abs(current.x      - target.x)      > 2 ||
+        Math.abs(current.y      - target.y)      > 2 ||
+        Math.abs(current.width  - target.width)  > 2 ||
+        Math.abs(current.height - target.height) > 2;
 
-    if (!win.isAttachedToDesktop) {
-        win.setBounds(bounds);
+    if (drifted) {
+        console.log(`[maintain] bounds drifted (${JSON.stringify(current)} → ${JSON.stringify(target)}) — re-applying`);
+        win.setBounds(win.isAttachedToDesktop ? toWorkerWRelativeBounds(target) : target);
     }
 
     if (win.isMinimized()) {
@@ -668,10 +715,15 @@ async function startLiveWallpaper() {
     console.log("Starting live wallpaper...");
     stopStaticUpdates();
 
-    const displays = getSortedDisplays();
-    liveWindows = displays.map(display => createLiveWallpaperWindow(display));
+    const virtualBounds = getVirtualBounds();
 
-    await Promise.all(liveWindows.map(waitForVisibleThenAttach));
+    // One window spanning the whole virtual desktop.  Monitors left of/above the
+    // primary (negative coordinates) are fine: attachWindowToDesktop re-applies
+    // the bounds in WorkerW-relative coordinates after reparenting.
+    const win = createLiveWallpaperWindow({ id: "virtual-desktop", bounds: virtualBounds, scaleFactor: 1 });
+    liveWindows = [win];
+
+    await waitForVisibleThenAttach(win);
     startLiveWallpaperMaintenance();
     buildTrayMenu();
 }
@@ -697,6 +749,12 @@ function stopLiveWallpaper() {
     void runWallpaperUpdate();
     startStaticUpdates();
     buildTrayMenu();
+}
+
+function setLiveEnabled(enabled) {
+    const config = readConfig();
+    config.liveEnabled = enabled;
+    writeConfig(config);
 }
 
 function refreshLiveWallpaper() {
@@ -738,6 +796,7 @@ function openSettings() {
 
 // ─── Tray ─────────────────────────────────────────────────────────────────────
 function buildTrayMenu() {
+    if (!tray || tray.isDestroyed()) return;
     const isLive   = liveWindows.length > 0;
     const config   = readConfig();
     const template = [
@@ -757,6 +816,10 @@ function buildTrayMenu() {
                 if (isLive) {
                     stopLiveWallpaper();
                     setTimeout(startLiveWallpaper, 800);
+                } else {
+                    // A video wallpaper only plays in live mode — start it.
+                    setLiveEnabled(true);
+                    startLiveWallpaper();
                 }
             }
         },
@@ -780,8 +843,8 @@ function buildTrayMenu() {
             }
         },
         isLive
-            ? { label: "Stop Live Wallpaper",  click: () => stopLiveWallpaper() }
-            : { label: "Start Live Wallpaper", click: () => startLiveWallpaper() },
+            ? { label: "Stop Live Wallpaper",  click: () => { setLiveEnabled(false); stopLiveWallpaper();  } }
+            : { label: "Start Live Wallpaper", click: () => { setLiveEnabled(true);  startLiveWallpaper(); } },
         { type: "separator" }
     ];
 
@@ -858,9 +921,7 @@ app.whenReady().then(async () => {
     buildTrayMenu();
     console.log("Tray created.");
 
-    const fontsDir   = app.isPackaged
-        ? path.join(process.resourcesPath, "app.asar.unpacked", "fonts")
-        : path.join(__dirname, "fonts");
+    const fontsDir = getFontsDir();
 
     const anuratiPath  = path.join(fontsDir, "anurati.ttf");
     const rajdhaniPath = path.join(fontsDir, "Rajdhani-Bold.ttf");
@@ -878,10 +939,15 @@ app.whenReady().then(async () => {
         console.log("Fonts registered.");
     } catch (e) { console.error("Font registration error:", e); }
 
-    try { await runWallpaperUpdate(); }
-    catch (e) { console.error("Initial wallpaper error:", e); }
-
-    startStaticUpdates();
+    // Resume whichever mode was active last time the app ran.
+    if (readConfig().liveEnabled) {
+        try { await startLiveWallpaper(); }
+        catch (e) { console.error("Live wallpaper autostart error:", e); }
+    } else {
+        try { await runWallpaperUpdate(); }
+        catch (e) { console.error("Initial wallpaper error:", e); }
+        startStaticUpdates();
+    }
 
     if (app.isPackaged) setupAutoUpdater();
 
@@ -895,4 +961,17 @@ app.whenReady().then(async () => {
     app.on("window-all-closed", e => e.preventDefault());
 
     console.log("Startup complete.");
+});
+
+// Detach live windows before quitting so the desktop is left in a clean
+// state (otherwise WorkerW can keep showing a stale frame of the window).
+app.on("before-quit", () => {
+    stopLiveWallpaperMaintenance();
+    const windowsToClose = [...liveWindows];
+    liveWindows = [];
+    windowsToClose.forEach(win => {
+        if (win.isDestroyed()) return;
+        try { detach(win); } catch (e) { console.warn("[quit] detach failed:", e.message); }
+        win.destroy();
+    });
 });
