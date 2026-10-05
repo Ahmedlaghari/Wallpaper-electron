@@ -24,6 +24,9 @@ let wallpaperUpdateInProgress = false;
 let updateTimer                   = null;
 let liveWindows                   = [];
 let liveWallpaperMaintenanceTimer = null;
+// Clock-only mode uses Windows' native wallpaper compositor instead of
+// keeping a transparent Electron renderer alive.
+let clockOnlyWallpaperActive      = false;
 
 let tray              = null;
 let settingsWindow    = null;
@@ -45,6 +48,13 @@ function readBackgroundPath() {
     catch { return ""; }
 }
 
+function hasUsableVideoWallpaper(config = readConfig()) {
+    return config.videoEnabled === true &&
+        typeof config.videoPath === "string" &&
+        config.videoPath.length > 0 &&
+        fs.existsSync(config.videoPath);
+}
+
 function writeConfig(config) {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -55,6 +65,21 @@ function getFontsDir() {
     return app.isPackaged
         ? path.join(process.resourcesPath, "fonts")
         : path.join(__dirname, "fonts");
+}
+
+// Start the installed app with Windows so the wallpaper is restored after login.
+function configureWindowsStartup() {
+    if (process.platform !== "win32" || !app.isPackaged) return;
+
+    try {
+        app.setLoginItemSettings({
+            openAtLogin: true,
+            path: process.execPath
+        });
+        console.log("Windows startup enabled for:", process.execPath);
+    } catch (e) {
+        console.error("Could not enable Windows startup:", e);
+    }
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -405,7 +430,10 @@ function startStaticUpdates() {
     stopStaticUpdates();
     const config          = readConfig();
     const intervalSeconds = Number.parseInt(config.interval, 10);
-    const delay           = Math.max(1, Number.isFinite(intervalSeconds) ? intervalSeconds : 60) * 1000;
+    const requestedDelay  = config.showSeconds === true
+        ? 1
+        : (Number.isFinite(intervalSeconds) ? intervalSeconds : 60);
+    const delay           = Math.max(1, requestedDelay) * 1000;
     console.log(`Static updates scheduled every ${delay / 1000}s.`);
     updateTimer = setInterval(async () => {
         if (liveWindows.length > 0) return;
@@ -526,7 +554,10 @@ function attachWindowToDesktop(win) {
     if (win.isDestroyed())       return;
 
     try {
-        attach(win, { transparent: true });
+        // Transparent native windows are substantially more expensive when
+        // Chromium is painting video. The video mode is opaque; only the
+        // clock canvas itself remains alpha-enabled inside the window.
+        attach(win, { transparent: win.liveHasVideo !== true });
         win.isAttachedToDesktop = true;
         // SetParent reinterprets the window's coordinates relative to WorkerW's
         // client area, whose origin is the virtual screen's top-left — which is
@@ -640,6 +671,7 @@ function getDisplayForLiveWindow(win) {
 // ─── Live wallpaper – per-display windows ─────────────────────────────────────
 function createLiveWallpaperWindow(display) {
     const bounds = display.bounds;
+    const liveHasVideo = hasUsableVideoWallpaper();
     console.log(`Creating live wallpaper window for display id=${display.id} bounds=${JSON.stringify(bounds)} scale=${display.scaleFactor}`);
 
     const win = new BrowserWindow({
@@ -657,15 +689,22 @@ function createLiveWallpaperWindow(display) {
         show:           false,
         focusable:      false,
         fullscreenable: false,
-        transparent:    true,
+        // An opaque video surface avoids the expensive transparent-window
+        // compositor path. live.html still draws the clock canvas with alpha.
+        transparent:    !liveHasVideo,
+        backgroundColor: liveHasVideo ? "#000000" : "#00000000",
         webPreferences: {
             nodeIntegration:      true,
             contextIsolation:     false,
-            backgroundThrottling: false,
+            // This is a once-per-second clock overlay, not a continuously
+            // animated scene.  Let Chromium throttle the hidden renderer so
+            // it cannot compete with normal desktop windows for GPU time.
+            backgroundThrottling: true,
         }
     });
 
     win.liveDisplayId       = display.id;
+    win.liveHasVideo         = liveHasVideo;
     win.isAttachedToDesktop = false;
 
     win.setMenu(null);
@@ -711,9 +750,27 @@ async function waitForVisibleThenAttach(win) {
 }
 
 async function startLiveWallpaper() {
-    if (liveWindows.length > 0) { console.log("startLiveWallpaper: already running."); return; }
+    if (liveWindows.length > 0 || clockOnlyWallpaperActive) {
+        console.log("startLiveWallpaper: already running.");
+        return;
+    }
     console.log("Starting live wallpaper...");
     stopStaticUpdates();
+
+    const config = readConfig();
+    const hasUsableVideo = hasUsableVideoWallpaper(config);
+
+    if (!hasUsableVideo) {
+        // A clock over a static image is not an animated wallpaper. Avoid
+        // Electron, electron-as-wallpaper, a transparent window, and a GPU
+        // surface when there is no video to render.
+        clockOnlyWallpaperActive = true;
+        console.log("Using native static wallpaper mode (no usable video).");
+        await runWallpaperUpdate();
+        startStaticUpdates();
+        buildTrayMenu();
+        return;
+    }
 
     const virtualBounds = getVirtualBounds();
 
@@ -729,8 +786,12 @@ async function startLiveWallpaper() {
 }
 
 function stopLiveWallpaper() {
-    if (liveWindows.length === 0) { console.log("stopLiveWallpaper: not running."); return; }
+    if (liveWindows.length === 0 && !clockOnlyWallpaperActive) {
+        console.log("stopLiveWallpaper: not running.");
+        return;
+    }
     console.log("Stopping live wallpaper...");
+    clockOnlyWallpaperActive = false;
     const windowsToClose = [...liveWindows];
     liveWindows = [];
     stopLiveWallpaperMaintenance();
@@ -759,12 +820,20 @@ function setLiveEnabled(enabled) {
 
 function refreshLiveWallpaper() {
     console.log("Refreshing live wallpaper settings...");
+    if (clockOnlyWallpaperActive) {
+        void runWallpaperUpdate({ skipIfBusy: true });
+        return;
+    }
     liveWindows.forEach(win => {
         if (!win.isDestroyed()) win.webContents.send("live-settings-updated");
     });
 }
 
 function restartLiveWallpaperForDisplays() {
+    if (clockOnlyWallpaperActive) {
+        void runWallpaperUpdate({ skipIfBusy: true });
+        return;
+    }
     if (liveWindows.length === 0) return;
     console.log("Display change detected — restarting live wallpaper.");
     stopLiveWallpaper();
@@ -797,7 +866,7 @@ function openSettings() {
 // ─── Tray ─────────────────────────────────────────────────────────────────────
 function buildTrayMenu() {
     if (!tray || tray.isDestroyed()) return;
-    const isLive   = liveWindows.length > 0;
+    const isLive   = liveWindows.length > 0 || clockOnlyWallpaperActive;
     const config   = readConfig();
     const template = [
         {
@@ -829,7 +898,18 @@ function buildTrayMenu() {
                 const cfg = readConfig();
                 cfg.videoEnabled = !cfg.videoEnabled;
                 fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
-                if (isLive) refreshLiveWallpaper();
+                if (isLive && cfg.videoEnabled && clockOnlyWallpaperActive) {
+                    // Transition from native clock mode to the Electron video
+                    // renderer only when video has actually been enabled.
+                    clockOnlyWallpaperActive = false;
+                    startLiveWallpaper().catch(e => console.error("Could not start video wallpaper:", e));
+                } else if (isLive && !cfg.videoEnabled && liveWindows.length > 0) {
+                    // Drop the Electron renderer as soon as video is disabled.
+                    stopLiveWallpaper();
+                    setTimeout(() => startLiveWallpaper().catch(e => console.error("Could not start native wallpaper:", e)), 250);
+                } else if (isLive) {
+                    refreshLiveWallpaper();
+                }
                 buildTrayMenu();
             }
         },
@@ -909,12 +989,11 @@ function setupAutoUpdater() {
     setInterval(() => autoUpdater.checkForUpdates().catch(e => console.error(e)), 4 * 60 * 60 * 1000);
 }
 
-app.commandLine.appendSwitch("disable-gpu-compositing");
-
 // ─── App ready ────────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
     console.log("App ready.");
     ensureConfigExists();
+    configureWindowsStartup();
 
     tray = new Tray(path.join(__dirname, "icon.png"));
     tray.setToolTip("Live Wallpaper");

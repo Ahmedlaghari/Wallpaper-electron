@@ -27,15 +27,15 @@
     const fs              = require("fs");
 
     const canvas = document.getElementById("main-canvas");
-    const ctx    = canvas.getContext("2d");
+    // This surface is an overlay above the real Windows wallpaper.  Keep the
+    // backing store transparent; the desktop already owns the background.
+    const ctx    = canvas.getContext("2d", { alpha: true });
 
 
     // ── State ─────────────────────────────────────────────────────────────────────
     let config       = {};
     let displays     = [];      // [{id, bounds, scaleFactor, physW, physH, offsetX, offsetY}, ...]
     let virtualBounds = null;   // local bounds for this window
-    let bgImage      = null;
-    let cachedBgPath = null;
     let fonts        = {};
     let fontsLoaded  = false;
     let clockTimer   = null;
@@ -74,7 +74,10 @@
 
         if (!fontsLoaded) await loadFonts();
 
-        await applyBackground(data.backgroundPath);
+        // Do not decode or paint the background here.  The live window is an
+        // overlay and the normal desktop wallpaper is already underneath it.
+        // Painting a second full-screen image makes Chromium composite a very
+        // large transparent surface every time the clock changes.
         applyVideos();
         startClock();
     }
@@ -109,27 +112,6 @@
             } catch (e) { console.warn(`Font failed: ${family}`, e.message); }
         }));
         fontsLoaded = true;
-    }
-
-    // ── Background image ──────────────────────────────────────────────────────────
-    async function applyBackground(bgPath) {
-        if (!bgPath || !fs.existsSync(bgPath)) return;
-        if (cachedBgPath !== bgPath || !bgImage) {
-            try {
-                bgImage      = await loadImg(`file://${bgPath.replace(/\\/g, "/")}`);
-                cachedBgPath = bgPath;
-            } catch (e) { console.error("BG load failed:", e.message); return; }
-        }
-        redraw();
-    }
-
-    function loadImg(src) {
-        return new Promise((res, rej) => {
-            const img    = new Image();
-            img.onload   = () => res(img);
-            img.onerror  = rej;
-            img.src      = src;
-        });
     }
 
     // ── Per-monitor video elements ────────────────────────────────────────────────
@@ -204,7 +186,10 @@
         if (!virtualBounds) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const videoActive = config.videoEnabled && config.videoPath && fs.existsSync(config.videoPath || "");
+        if (config.clockEnabled === false) return;
+
+        const now = new Date();
+        const clockText = getClockText(now);
 
         displays.forEach(d => {
             const ox = d.offsetX;
@@ -212,38 +197,21 @@
             const W  = d.bounds.width;
             const H  = d.bounds.height;
 
-            // Draw background image only when no video is covering this monitor
-            if (!videoActive && bgImage) {
-                const imgR = bgImage.naturalWidth / bgImage.naturalHeight;
-                const tgtR = W / H;
-                let sx = 0, sy = 0, sw = bgImage.naturalWidth, sh = bgImage.naturalHeight;
-                if (imgR > tgtR) {
-                    sw = Math.round(sh * tgtR);
-                    sx = Math.round((bgImage.naturalWidth - sw) / 2);
-                } else {
-                    sh = Math.round(sw / tgtR);
-                    sy = Math.round((bgImage.naturalHeight - sh) / 2);
-                }
-                ctx.drawImage(bgImage, sx, sy, sw, sh, ox, oy, W, H);
-            }
-
-            // Clock overlay for this monitor
-            if (1) {
-                drawClockForRegion(ox, oy, W, H);
-            }
+            drawClockForRegion(ox, oy, W, H, clockText);
         });
     }
 
-    // ── Clock drawing (for one monitor's region) ──────────────────────────────────
-    function drawClockForRegion(ox, oy, W, H) {
-        const showSeconds = config.showSeconds === true;
-        const now  = new Date();
+    function getClockText(now) {
         const day  = now.toLocaleDateString("en-US", { weekday: "long" });
         const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-
         const timeOpts = { hour: "2-digit", minute: "2-digit", hour12: config.hour12 !== false };
-        if (showSeconds) timeOpts.second = "2-digit";
-        const time = now.toLocaleTimeString("en-US", timeOpts);
+        if (config.showSeconds === true) timeOpts.second = "2-digit";
+        return { day, date, time: now.toLocaleTimeString("en-US", timeOpts) };
+    }
+
+    // ── Clock drawing (for one monitor's region) ──────────────────────────────────
+    function drawClockForRegion(ox, oy, W, H, clockText) {
+        const { day, date, time } = clockText;
 
         ctx.save();
         // Clip drawing to this monitor's region so text doesn't bleed into adjacent monitors
@@ -318,9 +286,22 @@
 
     // ── Clock ticker ──────────────────────────────────────────────────────────────
     function startClock() {
-        if (clockTimer) clearInterval(clockTimer);
-        redraw();
-        clockTimer = setInterval(redraw, 1000);
+        if (clockTimer) clearTimeout(clockTimer);
+
+        const tick = () => {
+            redraw();
+
+            // When seconds are hidden, the rendered text changes only once per
+            // minute. Schedule the next repaint at that boundary instead of
+            // redrawing the full transparent desktop every second.
+            const now = new Date();
+            const delay = config.showSeconds === true
+                ? 1000
+                : ((60 - now.getSeconds()) * 1000) + 50;
+            clockTimer = setTimeout(tick, delay);
+        };
+
+        tick();
     }
 
     // ── IPC ───────────────────────────────────────────────────────────────────────
