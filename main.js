@@ -444,7 +444,10 @@ function startStaticUpdates() {
 
 // ─── IPC ──────────────────────────────────────────────────────────────────────
 ipcMain.on("reload-wallpaper", async () => {
-    if (liveWindows.length > 0) refreshLiveWallpaper();
+    if (liveWindows.length > 0) {
+        reconnectLiveWallpaperHost();
+        refreshLiveWallpaper();
+    }
     else await runWallpaperUpdate();
 });
 
@@ -829,6 +832,30 @@ function refreshLiveWallpaper() {
     });
 }
 
+// Another wallpaper application can recreate WorkerW and leave our window
+// attached to the old desktop host. Force a native detach/attach cycle so the
+// wallpaper is visible again without restarting the whole Electron process.
+function reconnectLiveWallpaperHost() {
+    if (liveWindows.length === 0) return;
+    console.log("Refreshing live wallpaper desktop host...");
+
+    liveWindows.forEach(win => {
+        if (win.isDestroyed()) return;
+        try {
+            detach(win);
+        } catch (e) {
+            console.warn(`[refresh] detach failed display=${win.liveDisplayId}:`, e.message);
+        }
+        win.isAttachedToDesktop = false;
+    });
+
+    setTimeout(() => {
+        liveWindows.forEach(win => {
+            if (!win.isDestroyed()) maintainLiveWallpaperWindow(win);
+        });
+    }, 250);
+}
+
 function restartLiveWallpaperForDisplays() {
     if (clockOnlyWallpaperActive) {
         void runWallpaperUpdate({ skipIfBusy: true });
@@ -918,7 +945,10 @@ function buildTrayMenu() {
         {
             label: "Reload Wallpaper",
             click: async () => {
-                if (isLive) refreshLiveWallpaper();
+                if (isLive && liveWindows.length > 0) {
+                    reconnectLiveWallpaperHost();
+                    refreshLiveWallpaper();
+                }
                 else await runWallpaperUpdate();
             }
         },
