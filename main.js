@@ -459,6 +459,45 @@ ipcMain.on("settings-updated", () => {
 ipcMain.handle("get-user-data-path",      () => app.getPath("userData"));
 ipcMain.handle("get-live-wallpaper-data", event => getLiveWallpaperData(event.sender));
 
+// The screen picker uses a snapshot so the picker window itself never hides
+// the pixel being sampled.  The renderer captures the screens while this
+// window is hidden, then asks us to stretch it over the virtual desktop.
+ipcMain.handle("prepare-screen-color-picker", () => {
+    if (!settingsWindow || settingsWindow.isDestroyed()) return null;
+
+    settingsWindow.colorPickerBounds = settingsWindow.getBounds();
+    settingsWindow.colorPickerWasAlwaysOnTop = settingsWindow.isAlwaysOnTop();
+    settingsWindow.hide();
+
+    const displays = getSortedDisplays();
+    const virtualBounds = getVirtualBounds(displays);
+    return { virtualBounds, displays };
+});
+
+ipcMain.handle("show-screen-color-picker", () => {
+    if (!settingsWindow || settingsWindow.isDestroyed()) return null;
+
+    const bounds = getVirtualBounds();
+    settingsWindow.setAlwaysOnTop(true, "screen-saver");
+    // Use content bounds so the renderer's (0, 0) is the actual virtual
+    // screen origin even though the settings window normally has a frame.
+    settingsWindow.setContentBounds(bounds);
+    settingsWindow.show();
+    settingsWindow.focus();
+    return bounds;
+});
+
+ipcMain.handle("finish-screen-color-picker", () => {
+    if (!settingsWindow || settingsWindow.isDestroyed()) return;
+
+    const bounds = settingsWindow.colorPickerBounds;
+    settingsWindow.setAlwaysOnTop(settingsWindow.colorPickerWasAlwaysOnTop === true);
+    if (bounds) settingsWindow.setBounds(bounds);
+    settingsWindow.show();
+    settingsWindow.focus();
+    settingsWindow.colorPickerBounds = null;
+});
+
 // ─── Background / video picker ────────────────────────────────────────────────
 async function getImage() {
     const result = await dialog.showOpenDialog({

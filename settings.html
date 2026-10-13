@@ -220,6 +220,51 @@
             padding: 0;
         }
 
+        .screen-pick-btn {
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: #1b1b27;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 20px;
+            padding: 0 6px;
+        }
+
+        .screen-pick-btn:hover { color: var(--text); border-color: var(--accent); }
+
+        #screenPickerOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            cursor: crosshair;
+            background: #000;
+            z-index: 99999;
+        }
+
+        #screenPickerOverlay.active { display: block; }
+        #screenPickerOverlay img {
+            position: absolute;
+            display: block;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        #screenPickerHint {
+            position: fixed;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100000;
+            padding: 9px 14px;
+            border-radius: 6px;
+            background: rgba(10, 10, 15, .88);
+            color: #fff;
+            font: 12px 'Space Mono', monospace;
+            pointer-events: none;
+        }
+
         .toggle-row {
             display: flex;
             align-items: center;
@@ -582,6 +627,7 @@
                     <div class="color-row">
                         <input type="color" id="fontColorPicker" value="#ffffff">
                         <input type="text" id="fontColor" placeholder="#ffffff">
+                        <button class="screen-pick-btn" id="pickFontColor" title="Pick color from screen" aria-label="Pick font color from screen">⌖</button>
                     </div>
                 </div>
                 <div class="field">
@@ -589,6 +635,7 @@
                     <div class="color-row">
                         <input type="color" id="shadowColorPicker" value="#000000">
                         <input type="text" id="shadowColor" placeholder="#000000">
+                        <button class="screen-pick-btn" id="pickShadowColor" title="Pick color from screen" aria-label="Pick shadow color from screen">⌖</button>
                     </div>
                 </div>
             </div>
@@ -648,10 +695,15 @@
 
 <div class="toast" id="toast"></div>
 
+<div id="screenPickerOverlay" aria-label="Screen color picker">
+    <div id="screenPickerHint">Click anywhere to pick a color · Esc to cancel</div>
+</div>
+
 <script>
     const fs = require("fs");
     const path = require("path");
     const { ipcRenderer } = require("electron");
+    const { desktopCapturer } = require("electron");
 
     const DEFAULTS = {
         clockAnchor: "middle-center", clockOffsetX: 0, clockOffsetY: 0,
@@ -790,10 +842,19 @@
     // ── Helpers ───────────────────────────────────────────────────────────────────
     function toHex(color) {
         if (!color) return "#ffffff";
-        if (color.startsWith("#")) return color.length === 4
-            ? "#" + [...color.slice(1)].map(c => c+c).join("") : color;
-        if (color === "white") return "#ffffff";
-        if (color === "black") return "#000000";
+
+        // <input type="color"> only accepts six-digit RGB hex values.  The
+        // config also accepts CSS colors (for example "red" or "rgb(...)"),
+        // so normalize through the browser's CSS parser before assigning it.
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        context.fillStyle = color;
+        const parsed = context.fillStyle;
+        if (typeof parsed !== "string") return "#ffffff";
+        if (/^#[0-9a-f]{3}$/i.test(parsed)) {
+            return "#" + [...parsed.slice(1)].map(c => c + c).join("");
+        }
+        if (/^#[0-9a-f]{6}$/i.test(parsed)) return parsed;
         return "#ffffff";
     }
 
@@ -811,6 +872,110 @@
     document.getElementById("shadowColor").addEventListener("input", (e) => {
         if (e.target.value.startsWith("#")) document.getElementById("shadowColorPicker").value = toHex(e.target.value);
     });
+
+    // Capture each monitor before showing the full-screen picker.  This lets
+    // the user sample the desktop, other apps, and wallpapers without the
+    // picker window covering the original pixels.
+    let screenPicker = null;
+
+    async function startScreenColorPicker(target) {
+        if (screenPicker) return;
+
+        let prepared = false;
+        try {
+            const layout = await ipcRenderer.invoke("prepare-screen-color-picker");
+            if (!layout) return;
+            prepared = true;
+
+            const overlay = document.getElementById("screenPickerOverlay");
+            const sources = await desktopCapturer.getSources({
+                types: ["screen"],
+                thumbnailSize: { width: 4096, height: 4096 },
+                fetchWindowIcons: false
+            });
+            const virtual = layout.virtualBounds;
+            const displays = layout.displays.map((display, index) => {
+                const source = sources.find(s => String(s.display_id) === String(display.id)) || sources[index];
+                if (!source || source.thumbnail.isEmpty()) return null;
+
+                const image = document.createElement("img");
+                image.src = source.thumbnail.toDataURL();
+                image.style.left = `${display.bounds.x - virtual.x}px`;
+                image.style.top = `${display.bounds.y - virtual.y}px`;
+                image.style.width = `${display.bounds.width}px`;
+                image.style.height = `${display.bounds.height}px`;
+                overlay.appendChild(image);
+                return { display, image };
+            }).filter(Boolean);
+            if (!displays.length) throw new Error("No screen thumbnails were captured");
+
+            // Do not expose the overlay until every thumbnail has dimensions;
+            // otherwise a fast click can produce a 0x0 canvas sample.
+            await Promise.all(displays.map(({ image }) => {
+                if (image.complete && image.naturalWidth > 0) return undefined;
+                return new Promise((resolve, reject) => {
+                    image.addEventListener("load", resolve, { once: true });
+                    image.addEventListener("error", reject, { once: true });
+                });
+            }));
+
+            screenPicker = { target, overlay, virtual, displays };
+            overlay.classList.add("active");
+            await ipcRenderer.invoke("show-screen-color-picker");
+        } catch (error) {
+            console.error("Could not capture the screen for color picking:", error);
+            const overlay = document.getElementById("screenPickerOverlay");
+            overlay?.classList.remove("active");
+            overlay?.querySelectorAll("img").forEach(image => image.remove());
+            screenPicker = null;
+            if (prepared) await ipcRenderer.invoke("finish-screen-color-picker");
+            showToast("Screen color picking is unavailable");
+        }
+    }
+
+    function finishScreenColorPicker() {
+        if (!screenPicker) return;
+        const { overlay } = screenPicker;
+        overlay.classList.remove("active");
+        overlay.querySelectorAll("img").forEach(image => image.remove());
+        screenPicker = null;
+        void ipcRenderer.invoke("finish-screen-color-picker");
+    }
+
+    document.getElementById("screenPickerOverlay").addEventListener("click", (event) => {
+        if (!screenPicker) return;
+        const x = event.clientX;
+        const y = event.clientY;
+        const picked = screenPicker.displays.find(({ display }) =>
+            x >= display.bounds.x - screenPicker.virtual.x &&
+            x < display.bounds.x - screenPicker.virtual.x + display.bounds.width &&
+            y >= display.bounds.y - screenPicker.virtual.y &&
+            y < display.bounds.y - screenPicker.virtual.y + display.bounds.height
+        );
+        if (!picked) return;
+
+        const { display, image } = picked;
+        const localX = x - (display.bounds.x - screenPicker.virtual.x);
+        const localY = y - (display.bounds.y - screenPicker.virtual.y);
+        const pixelX = Math.min(image.naturalWidth - 1, Math.max(0, Math.floor(localX * image.naturalWidth / display.bounds.width)));
+        const pixelY = Math.min(image.naturalHeight - 1, Math.max(0, Math.floor(localY * image.naturalHeight / display.bounds.height)));
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 1;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
+        const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+        const color = `#${[r, g, b].map(value => value.toString(16).padStart(2, "0")).join("")}`;
+        screenPicker.target.value = color;
+        screenPicker.target.dispatchEvent(new Event("input", { bubbles: true }));
+        finishScreenColorPicker();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && screenPicker) finishScreenColorPicker();
+    });
+
+    document.getElementById("pickFontColor").addEventListener("click", () => startScreenColorPicker(document.getElementById("fontColorPicker")));
+    document.getElementById("pickShadowColor").addEventListener("click", () => startScreenColorPicker(document.getElementById("shadowColorPicker")));
     document.getElementById("hour12").addEventListener("change", updatePreview);
     document.getElementById("timePrefix").addEventListener("input", updatePreview);
     document.getElementById("timeSuffix").addEventListener("input", updatePreview);
