@@ -358,8 +358,14 @@ function stopStaticUpdates() {
 
 // Repaint exactly when the drawn clock changes: on every minute boundary, or
 // every second when seconds are shown.
+let staticUpdateGeneration = 0;
+
 function startStaticUpdates() {
     stopStaticUpdates();
+    // A tick can still be awaiting a wallpaper write when settings restart the
+    // schedule; the generation check stops that stale tick from re-arming and
+    // leaving a second, unstoppable timer chain behind.
+    const generation = ++staticUpdateGeneration;
     const schedule = () => {
         const delay = clockRenderer.msUntilNextTick(readConfig());
         updateTimer = setTimeout(async () => {
@@ -367,7 +373,7 @@ function startStaticUpdates() {
                 try { await runWallpaperUpdate({ skipIfBusy: true }); }
                 catch (e) { console.error("Scheduled wallpaper update failed:", e); }
             }
-            if (updateTimer) schedule();
+            if (updateTimer && generation === staticUpdateGeneration) schedule();
         }, delay);
     };
     schedule();
