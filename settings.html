@@ -3,914 +3,1035 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wallpaper Settings</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <title>Live Wallpaper</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --bg: #0a0a0f;
-            --surface: #111118;
-            --border: #1e1e2e;
-            --accent: #7c6aff;
-            --text: #e8e8f0;
-            --muted: #555570;
-            --input-bg: #16161f;
+            --bg:        #0b0b10;
+            --panel:     #111118;
+            --panel-2:   #16161f;
+            --line:      #22222f;
+            --line-2:    #2c2c3b;
+            --text:      #ececf3;
+            --text-2:    #a3a3b8;
+            --muted:     #6b6b82;
+            --accent:    #7c6aff;
+            --accent-2:  #9a8cff;
+            --accent-bg: rgba(124, 106, 255, 0.14);
+            --ok:        #3ddc97;
+            --warn:      #ffb547;
+            --radius:    10px;
+            --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+            --mono: "Space Mono", "Cascadia Mono", Consolas, monospace;
         }
 
+        html, body { height: 100%; }
         body {
             background: var(--bg);
             color: var(--text);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 14px;
-            height: 100vh;
+            font: 13px/1.45 var(--ui);
+            display: grid;
+            grid-template-columns: 210px 400px 1fr;
+            grid-template-rows: 1fr auto;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .header {
-            padding: 16px 24px 14px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: var(--surface);
-        }
-
-        .header-dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: var(--accent);
-            box-shadow: 0 0 12px var(--accent);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        .header h1 {
-            font-family: 'Space Mono', monospace;
-            font-size: 13px;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            color: var(--text);
-        }
-
-        .header span {
-            margin-left: auto;
-            font-size: 11px;
-            color: var(--muted);
-            font-family: 'Space Mono', monospace;
-        }
-
-        /* ── Monitor disclaimer ── */
-        .monitor-disclaimer {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            margin: 0;
-            padding: 10px 24px;
-            background: rgba(255, 180, 50, 0.06);
-            border-bottom: 1px solid rgba(255, 180, 50, 0.2);
-        }
-
-        .monitor-disclaimer .icon {
-            font-size: 14px;
-            margin-top: 1px;
-            flex-shrink: 0;
-        }
-
-        .monitor-disclaimer p {
-            font-family: 'Space Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.4px;
-            color: #ffb432;
-            line-height: 1.6;
-        }
-
-        /* ── Tabs ── */
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border);
-            background: var(--surface);
-            padding: 0 24px;
-        }
-
-        .tab {
-            padding: 10px 16px;
-            font-size: 12px;
-            font-family: 'Space Mono', monospace;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            color: var(--muted);
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
             user-select: none;
         }
 
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        /* ── Sidebar ─────────────────────────────────────────── */
+        .sidebar {
+            grid-row: 1 / 3;
+            background: var(--panel);
+            border-right: 1px solid var(--line);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 12px 14px;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; }
+        .brand-mark {
+            width: 30px; height: 30px; border-radius: 8px;
+            background: linear-gradient(135deg, var(--accent), #ff4d8d);
+            display: grid; place-items: center;
+            box-shadow: 0 4px 18px rgba(124, 106, 255, 0.35);
+        }
+        .brand-mark svg { width: 17px; height: 17px; }
+        .brand-name { font-weight: 600; font-size: 14px; }
+        .brand-ver { font: 10px var(--mono); color: var(--muted); }
 
-        .content {
-            flex: 1;
+        .nav { display: flex; flex-direction: column; gap: 2px; }
+        .nav button {
+            all: unset;
+            display: flex; align-items: center; gap: 11px;
+            padding: 9px 10px;
+            border-radius: 8px;
+            color: var(--text-2);
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .nav button svg { width: 16px; height: 16px; flex: none; opacity: 0.85; }
+        .nav button:hover { background: var(--panel-2); color: var(--text); }
+        .nav button.active { background: var(--accent-bg); color: var(--text); }
+        .nav button.active svg { color: var(--accent-2); opacity: 1; }
+        .nav button:focus-visible { outline: 2px solid var(--accent); }
+
+        .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+        .live-card {
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 11px 12px;
+        }
+        .live-card .row-between { display: flex; align-items: center; justify-content: space-between; }
+        .live-status { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 12px; }
+        .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+        .live-dot.on { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+        .live-card p { color: var(--muted); font-size: 11px; margin-top: 5px; }
+
+        /* ── Controls column ─────────────────────────────────── */
+        .controls {
+            grid-row: 1;
+            border-right: 1px solid var(--line);
             overflow-y: auto;
-            padding: 20px 24px;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border) transparent;
+            padding: 22px 22px 28px;
         }
+        .controls::-webkit-scrollbar { width: 10px; }
+        .controls::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 10px; border: 3px solid var(--bg); }
 
-        .tab-panel { display: none; }
-        .tab-panel.active { display: block; }
+        .page-title { font-size: 19px; font-weight: 600; margin-bottom: 2px; }
+        .page-sub { color: var(--muted); margin-bottom: 18px; }
 
-        .section { margin-bottom: 24px; }
-
-        .section-label {
-            font-family: 'Space Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 2px;
+        .group { margin-bottom: 20px; }
+        .group[hidden] { display: none; }
+        .group-title {
+            font: 700 10px var(--mono);
+            letter-spacing: 1.6px;
             text-transform: uppercase;
             color: var(--muted);
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            margin-bottom: 8px;
         }
-
-        .section-label::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--border);
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
         }
-
-        .row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .row.single { grid-template-columns: 1fr; }
-        .row.triple { grid-template-columns: 1fr 1fr 1fr; }
-
         .field {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
+            padding: 11px 14px;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .field + .field { border-top: 1px solid var(--line); }
+        .field[hidden] { display: none; }
+        .field-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .field-label { color: var(--text); }
+        .field-hint { color: var(--muted); font-size: 11.5px; }
+        .note {
+            color: var(--text-2); font-size: 12px;
+            background: var(--accent-bg);
+            border: 1px solid rgba(124, 106, 255, 0.3);
+            border-radius: 8px; padding: 9px 12px; margin-bottom: 14px;
         }
 
-        .field label {
-            font-size: 11px;
-            color: var(--muted);
-            letter-spacing: 0.5px;
+        /* Toggle */
+        .switch { position: relative; width: 36px; height: 20px; flex: none; }
+        .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .switch span {
+            position: absolute; inset: 0; cursor: pointer;
+            background: var(--line-2); border-radius: 20px; transition: background .15s;
         }
-
-        .field input[type="text"],
-        .field input[type="number"],
-        .field select {
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text);
-            font-family: 'Space Mono', monospace;
-            font-size: 12px;
-            padding: 8px 10px;
-            outline: none;
-            transition: border-color 0.2s;
-            width: 100%;
+        .switch span::before {
+            content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px;
+            background: #fff; border-radius: 50%; transition: transform .15s;
         }
+        .switch input:checked + span { background: var(--accent); }
+        .switch input:checked + span::before { transform: translateX(16px); }
+        .switch input:focus-visible + span { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
-        .field input:focus,
-        .field select:focus { border-color: var(--accent); }
-
-        .color-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 6px 10px;
-            transition: border-color 0.2s;
+        /* Segmented */
+        .segmented {
+            display: flex; background: var(--panel-2); border: 1px solid var(--line);
+            border-radius: 8px; padding: 3px; gap: 3px;
         }
-
-        .color-row:focus-within { border-color: var(--accent); }
-
-        .color-row input[type="color"] {
-            width: 22px; height: 22px;
-            border: none;
-            border-radius: 4px;
-            background: none;
-            cursor: pointer;
-            padding: 0;
+        .segmented button {
+            all: unset; flex: 1; text-align: center; cursor: pointer;
+            padding: 6px 8px; border-radius: 6px; color: var(--text-2); font-size: 12px;
         }
+        .segmented button:hover { color: var(--text); }
+        .segmented button.active { background: var(--accent); color: #fff; }
+        .segmented button:focus-visible { outline: 2px solid var(--accent-2); }
 
-        .color-row input[type="text"] {
-            background: none;
-            border: none;
-            color: var(--text);
-            font-family: 'Space Mono', monospace;
-            font-size: 12px;
-            outline: none;
-            flex: 1;
-            padding: 0;
+        /* Range */
+        .range-row { display: flex; align-items: center; gap: 12px; }
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; flex: 1; height: 4px;
+            background: linear-gradient(to right, var(--accent) var(--pct, 50%), var(--line-2) var(--pct, 50%));
+            border-radius: 4px; outline: none; cursor: pointer;
         }
-
-        .screen-pick-btn {
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            background: #1b1b27;
-            color: var(--muted);
-            cursor: pointer;
-            font-size: 14px;
-            line-height: 20px;
-            padding: 0 6px;
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+            background: #fff; border: 3px solid var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.4);
         }
-
-        .screen-pick-btn:hover { color: var(--text); border-color: var(--accent); }
-
-        #screenPickerOverlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            overflow: hidden;
-            cursor: crosshair;
-            background: #000;
-            z-index: 99999;
+        input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+        .num {
+            width: 64px; background: var(--panel-2); border: 1px solid var(--line);
+            color: var(--text); border-radius: 6px; padding: 4px 6px;
+            font: 12px var(--mono); text-align: right; outline: none;
         }
+        .num:focus { border-color: var(--accent); }
+        .unit { color: var(--muted); font: 11px var(--mono); width: 18px; margin-left: -8px; }
 
-        #screenPickerOverlay.active { display: block; }
-        #screenPickerOverlay img {
-            position: absolute;
-            display: block;
-            pointer-events: none;
-            user-select: none;
+        /* Text */
+        .text {
+            width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+            color: var(--text); border-radius: 7px; padding: 7px 10px; font: 13px var(--ui); outline: none;
         }
+        .text:focus { border-color: var(--accent); }
+        .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .pair label { color: var(--muted); font-size: 11.5px; display: block; margin-bottom: 4px; }
 
-        #screenPickerHint {
-            position: fixed;
-            top: 18px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100000;
-            padding: 9px 14px;
-            border-radius: 6px;
-            background: rgba(10, 10, 15, .88);
-            color: #fff;
-            font: 12px 'Space Mono', monospace;
-            pointer-events: none;
+        /* Color */
+        .color-row { display: flex; align-items: center; gap: 8px; }
+        .swatch {
+            width: 32px; height: 30px; border-radius: 7px; border: 1px solid var(--line-2);
+            padding: 0; cursor: pointer; background: none; flex: none; overflow: hidden;
         }
-
-        .toggle-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 10px 12px;
+        .swatch::-webkit-color-swatch-wrapper { padding: 0; }
+        .swatch::-webkit-color-swatch { border: none; }
+        .icon-btn {
+            all: unset; width: 30px; height: 30px; border-radius: 7px; flex: none;
+            display: grid; place-items: center; cursor: pointer;
+            background: var(--panel-2); border: 1px solid var(--line); color: var(--text-2);
         }
+        .icon-btn:hover { color: var(--text); border-color: var(--line-2); }
+        .icon-btn:focus-visible { outline: 2px solid var(--accent); }
+        .icon-btn svg { width: 15px; height: 15px; }
 
-        .toggle-row span { font-size: 12px; color: var(--text); }
-
-        .toggle {
-            position: relative;
-            width: 36px; height: 20px;
+        /* Font picker */
+        .font-btn {
+            all: unset; display: flex; align-items: center; justify-content: space-between;
+            background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px;
+            padding: 8px 10px; cursor: pointer;
         }
-
-        .toggle input { opacity: 0; width: 0; height: 0; }
-
-        .toggle-slider {
-            position: absolute;
-            inset: 0;
-            background: var(--border);
-            border-radius: 20px;
-            cursor: pointer;
-            transition: 0.2s;
+        .font-btn:hover, .font-btn[aria-expanded="true"] { border-color: var(--accent); }
+        .font-btn:focus-visible { outline: 2px solid var(--accent); }
+        .font-btn .sample { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .font-btn .fname { color: var(--muted); font-size: 11px; font-family: var(--ui); margin-left: 10px; flex: none; }
+        .font-pop {
+            position: fixed; z-index: 50; width: 340px; max-height: 380px; overflow-y: auto;
+            background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius);
+            box-shadow: 0 18px 50px rgba(0,0,0,.55); padding: 6px;
         }
-
-        .toggle-slider:before {
-            content: '';
-            position: absolute;
-            width: 14px; height: 14px;
-            left: 3px; top: 3px;
-            background: var(--muted);
-            border-radius: 50%;
-            transition: 0.2s;
+        .font-pop[hidden] { display: none; }
+        .font-pop::-webkit-scrollbar { width: 10px; }
+        .font-pop::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 10px; border: 3px solid var(--panel); }
+        .font-pop .cat {
+            font: 700 9.5px var(--mono); letter-spacing: 1.4px; text-transform: uppercase;
+            color: var(--muted); padding: 10px 10px 4px;
         }
-
-        .toggle input:checked + .toggle-slider { background: var(--accent); }
-        .toggle input:checked + .toggle-slider:before {
-            transform: translateX(16px);
-            background: white;
+        .font-pop button {
+            all: unset; display: flex; align-items: baseline; justify-content: space-between;
+            width: calc(100% - 20px); padding: 7px 10px; border-radius: 7px; cursor: pointer;
         }
+        .font-pop button:hover, .font-pop button:focus-visible { background: var(--panel-2); }
+        .font-pop button.active { background: var(--accent-bg); }
+        .font-pop .sample { font-size: 20px; color: var(--text); }
+        .font-pop .fname { color: var(--muted); font-size: 11px; }
 
-        /* Clock anchor grid */
-        .anchor-wrap {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
+        /* Anchor grid */
+        .anchor-wrap { display: flex; gap: 16px; align-items: center; }
         .anchor-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 44px);
-            grid-template-rows: repeat(3, 44px);
-            gap: 4px;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 8px;
+            display: grid; grid-template-columns: repeat(3, 34px); gap: 5px;
+            background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 6px;
         }
-
-        .anchor-btn {
-            background: var(--border);
-            border: 1px solid transparent;
-            border-radius: 5px;
-            color: var(--muted);
-            cursor: pointer;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.15s;
+        .anchor-grid button {
+            all: unset; width: 34px; height: 24px; border-radius: 5px; cursor: pointer;
+            display: grid; place-items: center;
         }
-
-        .anchor-btn:hover { background: #2a2a3e; color: var(--text); }
-
-        .anchor-btn.active {
-            background: var(--accent);
-            color: white;
-            border-color: #9b8dff;
-            box-shadow: 0 0 8px rgba(124,106,255,0.4);
+        .anchor-grid button::after {
+            content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--line-2);
         }
+        .anchor-grid button:hover::after { background: var(--text-2); }
+        .anchor-grid button.active { background: var(--accent-bg); }
+        .anchor-grid button.active::after { background: var(--accent-2); width: 9px; height: 9px; }
+        .anchor-grid button:focus-visible { outline: 2px solid var(--accent); }
+        .anchor-name { font: 700 11px var(--mono); letter-spacing: 1px; color: var(--text-2); text-transform: uppercase; }
 
-        .anchor-label {
-            font-size: 11px;
-            color: var(--muted);
-            font-family: 'Space Mono', monospace;
-            letter-spacing: 1px;
+        /* Themes */
+        .themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .theme {
+            all: unset; cursor: pointer; border-radius: 9px; overflow: hidden;
+            border: 1px solid var(--line); background: #07070b;
         }
+        .theme:hover { border-color: var(--line-2); }
+        .theme:focus-visible { outline: 2px solid var(--accent); }
+        .theme-preview { height: 52px; display: grid; place-items: center; font-size: 15px; letter-spacing: 2px; }
+        .theme-name { font-size: 11px; color: var(--text-2); padding: 5px 8px; background: var(--panel); border-top: 1px solid var(--line); }
 
-        /* Preview */
-        .preview {
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 24px;
-            text-align: center;
-            margin-bottom: 20px;
-            position: relative;
-            overflow: hidden;
+        /* File row */
+        .file-row { display: flex; align-items: center; gap: 10px; }
+        .file-path {
+            flex: 1; min-width: 0; color: var(--text-2); font: 11.5px var(--mono);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left;
         }
+        .file-path.empty { color: var(--muted); direction: ltr; }
 
-        .preview::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(ellipse at center, #1a1a2e 0%, transparent 70%);
-        }
-
-        .preview-day {
-            font-size: 28px;
-            letter-spacing: 6px;
-            color: white;
-            text-shadow: 0 0 20px rgba(124,106,255,0.5);
-            position: relative;
-            font-weight: bold;
-        }
-
-        .preview-date {
-            font-size: 13px;
-            color: rgba(255,255,255,0.8);
-            margin-top: 6px;
-            position: relative;
-        }
-
-        .preview-time {
-            font-size: 18px;
-            color: rgba(255,255,255,0.9);
-            margin-top: 4px;
-            position: relative;
-        }
-
-        .footer {
-            padding: 14px 24px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            gap: 10px;
-            background: var(--surface);
-        }
-
+        /* Buttons */
         .btn {
-            flex: 1;
-            padding: 10px;
-            border-radius: 6px;
-            border: none;
-            font-family: 'Space Mono', monospace;
-            font-size: 11px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            cursor: pointer;
-            transition: all 0.2s;
+            all: unset; cursor: pointer; padding: 8px 16px; border-radius: 8px;
+            font-weight: 600; font-size: 12.5px; text-align: center;
+        }
+        .btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-2); }
+        .btn-primary:disabled, .btn-primary[aria-disabled="true"] { opacity: .45; cursor: default; }
+        .btn-ghost { color: var(--text-2); border: 1px solid var(--line-2); }
+        .btn-ghost:hover { color: var(--text); background: var(--panel-2); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        /* ── Preview column ──────────────────────────────────── */
+        .preview-col {
+            grid-row: 1;
+            padding: 22px 26px;
+            display: flex; flex-direction: column; gap: 14px;
+            min-width: 0; overflow: hidden;
+        }
+        .preview-head { display: flex; align-items: baseline; justify-content: space-between; }
+        .preview-head h2 { font-size: 13px; font-weight: 600; }
+        .preview-head span { color: var(--muted); font: 11px var(--mono); }
+        .monitor {
+            position: relative; width: 100%;
+            border-radius: 12px; overflow: hidden;
+            border: 1px solid var(--line-2);
+            box-shadow: 0 24px 60px rgba(0,0,0,.5);
+            background: radial-gradient(ellipse at 30% 20%, #232046 0%, #0d0d16 55%, #050508 100%);
+        }
+        .monitor > * { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .monitor img, .monitor video { object-fit: cover; }
+        .monitor canvas { z-index: 2; }
+        .stand { width: 18%; height: 14px; margin: -6px auto 0; background: var(--panel-2); border-radius: 0 0 8px 8px; border: 1px solid var(--line); border-top: none; }
+        .preview-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+        .chip {
+            font: 10.5px var(--mono); color: var(--text-2);
+            background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 3px 10px;
         }
 
-        .btn-save { background: var(--accent); color: white; }
-        .btn-save:hover { background: #9b8dff; }
-        .btn-reload { background: var(--border); color: var(--text); }
-        .btn-reload:hover { background: #2a2a3e; }
-        .btn-cancel { background: transparent; color: var(--muted); border: 1px solid var(--border); flex: 0.5; }
-        .btn-cancel:hover { color: var(--text); }
+        .preview-tip { color: var(--muted); font-size: 12px; }
+        .preview-tip b { color: var(--text-2); font-weight: 600; }
+
+        /* ── Footer ──────────────────────────────────────────── */
+        .footer {
+            grid-column: 2 / 4;
+            border-top: 1px solid var(--line);
+            background: var(--panel);
+            padding: 11px 22px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .dirty { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; margin-right: auto; }
+        .dirty::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); }
+        .dirty.on { color: var(--warn); }
+        .dirty.on::before { background: var(--warn); }
+        .kbd { font: 10px var(--mono); color: var(--muted); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
 
         .toast {
-            position: fixed;
-            bottom: 70px;
-            left: 50%;
-            transform: translateX(-50%) translateY(20px);
-            background: var(--accent);
-            color: white;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-family: 'Space Mono', monospace;
-            opacity: 0;
-            transition: all 0.3s;
-            pointer-events: none;
-            white-space: nowrap;
+            position: fixed; left: 50%; bottom: 70px; transform: translate(-50%, 12px);
+            background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text);
+            padding: 9px 16px; border-radius: 9px; font-size: 12.5px; opacity: 0;
+            transition: opacity .18s, transform .18s; pointer-events: none; z-index: 60;
+            box-shadow: 0 10px 30px rgba(0,0,0,.4);
         }
+        .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-        select option { background: var(--input-bg); }
-
-        .hint {
-            font-size: 10px;
-            color: var(--muted);
-            margin-top: 4px;
-            font-family: 'Space Mono', monospace;
+        /* Full-screen color picker overlay */
+        #screenPickerOverlay {
+            display: none; position: fixed; inset: 0; z-index: 9999; cursor: crosshair; background: #000;
+        }
+        #screenPickerOverlay.active { display: block; }
+        #screenPickerOverlay img { position: absolute; pointer-events: none; }
+        #screenPickerHint {
+            position: absolute; top: 18px; left: 50%; transform: translateX(-50%); z-index: 2;
+            background: rgba(10,10,15,.85); color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 12px;
         }
     </style>
 </head>
 <body>
 
-<div class="header">
-    <div class="header-dot"></div>
-    <h1>Wallpaper Settings</h1>
-    <span id="clock">--:--</span>
-</div>
-
-<!-- Monitor disclaimer -->
-<div class="monitor-disclaimer">
-    <span class="icon">⚠️</span>
-    <p>Live wallpaper spans all connected monitors. If a monitor is added or removed, the wallpaper restarts automatically to fit the new layout.</p>
-</div>
-
-<div class="tabs">
-    <div class="tab active" onclick="switchTab('typography', event)">Typography</div>
-    <div class="tab" onclick="switchTab('layout', event)">Layout</div>
-    <div class="tab" onclick="switchTab('style', event)">Style</div>
-    <div class="tab" onclick="switchTab('preview', event)">Preview</div>
-</div>
-
-<div class="content">
-
-    <!-- TYPOGRAPHY TAB -->
-    <div class="tab-panel active" id="tab-typography">
-
-        <div class="section">
-            <div class="section-label">Day</div>
-            <div class="row">
-                <div class="field">
-                    <label>Font Family</label>
-                    <input type="text" id="dayFont" placeholder="Anurati">
-                </div>
-                <div class="field">
-                    <label>Font Size (px)</label>
-                    <input type="number" id="daySize" placeholder="110">
-                </div>
-            </div>
-            <div class="row single">
-                <div class="field">
-                    <label>Letter Spacing (px)</label>
-                    <input type="number" id="daySpacing" placeholder="10">
-                </div>
-            </div>
+<aside class="sidebar">
+    <div class="brand">
+        <div class="brand-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
         </div>
-
-        <div class="section">
-            <div class="section-label">Date</div>
-            <div class="row">
-                <div class="field">
-                    <label>Font Family</label>
-                    <input type="text" id="dateFont" placeholder="Rajdhani">
-                </div>
-                <div class="field">
-                    <label>Font Size (px)</label>
-                    <input type="number" id="dateSize" placeholder="45">
-                </div>
-            </div>
+        <div>
+            <div class="brand-name">Live Wallpaper</div>
+            <div class="brand-ver" id="version">v—</div>
         </div>
+    </div>
 
-        <div class="section">
-            <div class="section-label">Time</div>
-            <div class="row">
-                <div class="field">
-                    <label>Font Family</label>
-                    <input type="text" id="timeFont" placeholder="Rajdhani">
-                </div>
-                <div class="field">
-                    <label>Font Size (px)</label>
-                    <input type="number" id="timeSize" placeholder="50">
-                </div>
-            </div>
-            <div class="row">
-                <div class="field">
-                    <label>Prefix</label>
-                    <input type="text" id="timePrefix" placeholder="- ">
-                </div>
-                <div class="field">
-                    <label>Suffix</label>
-                    <input type="text" id="timeSuffix" placeholder=" -">
-                </div>
-            </div>
-            <div class="toggle-row" style="margin-top:6px">
-                <span>12-hour format</span>
-                <label class="toggle">
-                    <input type="checkbox" id="hour12">
-                    <span class="toggle-slider"></span>
+    <nav class="nav" id="nav" aria-label="Settings sections"></nav>
+
+    <div class="sidebar-foot">
+        <div class="live-card">
+            <div class="row-between">
+                <div class="live-status"><span class="live-dot" id="liveDot"></span><span id="liveText">Stopped</span></div>
+                <label class="switch" title="Start or stop the live wallpaper">
+                    <input type="checkbox" id="liveToggle" aria-label="Live wallpaper running">
+                    <span></span>
                 </label>
             </div>
-        </div>
-
-    </div>
-
-    <!-- LAYOUT TAB -->
-    <div class="tab-panel" id="tab-layout">
-
-        <div class="section">
-            <div class="section-label">Clock Position</div>
-            <div class="anchor-wrap">
-                <div class="anchor-grid" id="anchorGrid">
-                    <button class="anchor-btn" data-pos="top-left"      title="Top Left">↖</button>
-                    <button class="anchor-btn" data-pos="top-center"    title="Top Center">↑</button>
-                    <button class="anchor-btn" data-pos="top-right"     title="Top Right">↗</button>
-                    <button class="anchor-btn" data-pos="middle-left"   title="Middle Left">←</button>
-                    <button class="anchor-btn" data-pos="middle-center" title="Center">⊙</button>
-                    <button class="anchor-btn" data-pos="middle-right"  title="Middle Right">→</button>
-                    <button class="anchor-btn" data-pos="bottom-left"   title="Bottom Left">↙</button>
-                    <button class="anchor-btn" data-pos="bottom-center" title="Bottom Center">↓</button>
-                    <button class="anchor-btn" data-pos="bottom-right"  title="Bottom Right">↘</button>
-                </div>
-                <span class="anchor-label" id="anchorLabel">CENTER</span>
-            </div>
-            <div class="row">
-                <div class="field">
-                    <label>X Fine-tune (px)</label>
-                    <input type="number" id="clockOffsetX" placeholder="0">
-                </div>
-                <div class="field">
-                    <label>Y Fine-tune (px)</label>
-                    <input type="number" id="clockOffsetY" placeholder="0">
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-label">Element Offsets (from anchor)</div>
-            <p class="hint" style="margin-bottom:10px">Negative = up, Positive = down, relative to the anchor point above.</p>
-            <div class="row triple">
-                <div class="field">
-                    <label>Day Y</label>
-                    <input type="number" id="dayY" placeholder="-270">
-                </div>
-                <div class="field">
-                    <label>Date Y</label>
-                    <input type="number" id="dateY" placeholder="-170">
-                </div>
-                <div class="field">
-                    <label>Time Y</label>
-                    <input type="number" id="timeY" placeholder="-80">
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-label">Canvas Size</div>
-            <div class="row">
-                <div class="field">
-                    <label>Width (px)</label>
-                    <input type="number" id="canvasWidth" placeholder="1920">
-                </div>
-                <div class="field">
-                    <label>Height (px)</label>
-                    <input type="number" id="canvasHeight" placeholder="1200">
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- STYLE TAB -->
-    <div class="tab-panel" id="tab-style">
-
-        <div class="section">
-            <div class="section-label">Colors</div>
-            <div class="row">
-                <div class="field">
-                    <label>Font Color</label>
-                    <div class="color-row">
-                        <input type="color" id="fontColorPicker" value="#ffffff">
-                        <input type="text" id="fontColor" placeholder="#ffffff">
-                        <button class="screen-pick-btn" id="pickFontColor" title="Pick color from screen" aria-label="Pick font color from screen">⌖</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>Shadow Color</label>
-                    <div class="color-row">
-                        <input type="color" id="shadowColorPicker" value="#000000">
-                        <input type="text" id="shadowColor" placeholder="#000000">
-                        <button class="screen-pick-btn" id="pickShadowColor" title="Pick color from screen" aria-label="Pick shadow color from screen">⌖</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-label">Shadow</div>
-            <div class="toggle-row" style="margin-bottom: 10px">
-                <span>Enable Shadow</span>
-                <label class="toggle">
-                    <input type="checkbox" id="shadowToggle">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="row single">
-                <div class="field">
-                    <label>Shadow Blur (px)</label>
-                    <input type="number" id="shadowBlur" placeholder="40">
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-label">Update Interval</div>
-            <div class="row single">
-                <div class="field">
-                    <label>Refresh every (seconds)</label>
-                    <input type="number" id="interval" placeholder="60">
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- PREVIEW TAB -->
-    <div class="tab-panel" id="tab-preview">
-        <div class="section">
-            <div class="section-label">Live Preview</div>
-            <div class="preview">
-                <div class="preview-day" id="prev-day">MONDAY</div>
-                <div class="preview-date" id="prev-date">April 21, 2026</div>
-                <div class="preview-time" id="prev-time">- 11:47 PM -</div>
-            </div>
-            <p style="font-size:11px; color: var(--muted); text-align:center">
-                Preview is approximate — actual wallpaper may vary slightly by font.
-            </p>
+            <p id="liveHint">The clock is drawn onto your wallpaper.</p>
         </div>
     </div>
+</aside>
 
-</div>
+<main class="controls" id="controls"></main>
 
-<div class="footer">
-    <button class="btn btn-cancel" onclick="window.close()">Close</button>
-    <button class="btn btn-reload" onclick="reloadWallpaper()">Reload Wallpaper</button>
-    <button class="btn btn-save" onclick="save()">Save Settings</button>
-</div>
+<section class="preview-col" aria-label="Preview">
+    <div class="preview-head">
+        <h2>Preview</h2>
+        <span id="screenLabel">—</span>
+    </div>
+    <div>
+        <div class="monitor" id="monitor">
+            <img id="previewImg" alt="" hidden>
+            <video id="previewVideo" muted loop playsinline hidden></video>
+            <canvas id="previewCanvas"></canvas>
+        </div>
+        <div class="stand"></div>
+    </div>
+    <div class="preview-meta" id="previewMeta"></div>
+    <p class="preview-tip">Edits show here instantly. Press <b>Apply</b> to update your desktop.</p>
+</section>
 
-<div class="toast" id="toast"></div>
+<footer class="footer">
+    <div class="dirty" id="dirty">All changes applied</div>
+    <button class="btn btn-ghost" id="resetBtn" title="Restore default clock settings">Reset</button>
+    <button class="btn btn-ghost" id="reloadBtn" title="Re-apply the wallpaper to the desktop">Reload wallpaper</button>
+    <button class="btn btn-primary" id="applyBtn">Apply<span class="kbd" style="color:#ddd;border-color:rgba(255,255,255,.35)">Ctrl S</span></button>
+</footer>
 
+<div class="font-pop" id="fontPop" role="listbox" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="screenPickerOverlay" aria-label="Screen color picker">
     <div id="screenPickerHint">Click anywhere to pick a color · Esc to cancel</div>
 </div>
 
 <script>
+    const { ipcRenderer, desktopCapturer } = require("electron");
     const fs = require("fs");
-    const path = require("path");
-    const { ipcRenderer } = require("electron");
-    const { desktopCapturer } = require("electron");
+    const { pathToFileURL } = require("url");
+    const clockRenderer = require("./clock-renderer.js");
 
-    const DEFAULTS = {
-        clockAnchor: "middle-center", clockOffsetX: 0, clockOffsetY: 0,
-        dayY: -270, dateY: -170, timeY: -80,
-        daySize: 110, dateSize: 45, timeSize: 50, daySpacing: 10,
-        fontColor: "#ffffff", shadowEnabled: true, shadowBlur: 40, shadowColor: "#000000",
-        dayFont: "Anurati", dateFont: "Rajdhani", timeFont: "Rajdhani",
-        timePrefix: "- ", timeSuffix: " -", hour12: true,
-        interval: 60, canvasWidth: 1920, canvasHeight: 1200
+    // ── State ─────────────────────────────────────────────────────────────────
+    let ctxData   = null;   // from main: config, fonts, screenSize, …
+    let saved     = {};     // last applied config
+    let draft     = {};     // what the user is editing
+    let page      = "clock";
+    let fontPopFor = null;
+
+    const $ = id => document.getElementById(id);
+    const isAnalog  = c => c.clockStyle === "analog";
+    const isDigital = c => !isAnalog(c);
+
+    // Keys edited on this page and saved through Apply.
+    const EDITABLE_KEYS = [...Object.keys(clockRenderer.DEFAULTS), "videoVolume", "videoLoop"];
+
+    // ── Icons ─────────────────────────────────────────────────────────────────
+    const ICON = {
+        clock:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+        type:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>',
+        layout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8" cy="9" r="1.6" fill="currentColor"/><path d="M8 21h8"/></svg>',
+        look:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.9 2-2 0-.6-.3-1-.6-1.4-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.1-4-7.5-9-7.5z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.2" fill="currentColor"/></svg>',
+        image:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>',
+        pick:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m14 7 3 3M5 19l1-4 9.5-9.5a2.1 2.1 0 0 1 3 3L9 18z"/></svg>',
     };
 
-    let fullConfig = {};
-    let configPath;
-    let currentAnchor = "middle-center";
+    // ── Themes (colors + fonts only; layout is untouched) ────────────────────
+    const THEMES = [
+        { name: "Crimson",  fontColor: "#ff2a2a", shadowColor: "#3e0a0a", shadowBlur: 40, accentColor: "#ffffff", dayFont: "Anurati",    dateFont: "Rajdhani",        timeFont: "Rajdhani" },
+        { name: "Neon",     fontColor: "#5ef6ff", shadowColor: "#0077ff", shadowBlur: 50, accentColor: "#ff3df2", dayFont: "Monoton",    dateFont: "Orbitron",        timeFont: "Orbitron" },
+        { name: "Minimal",  fontColor: "#ffffff", shadowColor: "#000000", shadowBlur: 24, accentColor: "#ff4d4d", dayFont: "Bebas Neue", dateFont: "Poppins",         timeFont: "Poppins" },
+        { name: "Sunset",   fontColor: "#ffb86b", shadowColor: "#ff3d00", shadowBlur: 45, accentColor: "#ffe08a", dayFont: "Righteous",  dateFont: "Space Mono",      timeFont: "Righteous" },
+        { name: "Terminal", fontColor: "#39ff14", shadowColor: "#0b3d02", shadowBlur: 30, accentColor: "#c8ff9e", dayFont: "Share Tech Mono", dateFont: "Share Tech Mono", timeFont: "Share Tech Mono" },
+        { name: "Elegant",  fontColor: "#f5e6c8", shadowColor: "#000000", shadowBlur: 30, accentColor: "#d4a857", dayFont: "Syncopate",  dateFont: "Great Vibes",     timeFont: "Michroma" },
+    ];
 
-    const anchorLabels = {
-        "top-left": "TOP LEFT", "top-center": "TOP CENTER", "top-right": "TOP RIGHT",
-        "middle-left": "MIDDLE LEFT", "middle-center": "CENTER", "middle-right": "MIDDLE RIGHT",
-        "bottom-left": "BOTTOM LEFT", "bottom-center": "BOTTOM CENTER", "bottom-right": "BOTTOM RIGHT"
-    };
+    // ── Page schema ───────────────────────────────────────────────────────────
+    const PAGES = [
+        {
+            id: "clock", label: "Clock", icon: ICON.clock,
+            sub: "Choose what the clock looks like and how it tells time.",
+            groups: [
+                { title: "Display", fields: [
+                    { type: "toggle", key: "clockEnabled", label: "Show clock on wallpaper" },
+                    { type: "segmented", key: "clockStyle", label: "Style", options: [["digital", "Digital"], ["analog", "Analog"]] },
+                ]},
+                { title: "Time format", fields: [
+                    { type: "toggle", key: "hour12", label: "12-hour time" },
+                    { type: "toggle", key: "showSeconds", label: "Show seconds",
+                      hint: "Redraws every second instead of once a minute, which uses more CPU. Without a video wallpaper it re-applies the Windows wallpaper every second." },
+                ]},
+                { title: "Analog dial", show: isAnalog, fields: [
+                    { type: "range", key: "analogSize", label: "Dial size", min: 60, max: 420, step: 1, unit: "px" },
+                    { type: "segmented", key: "analogFace", label: "Face", options: [["ring", "Ring"], ["glass", "Glass"], ["none", "None"]] },
+                    { type: "segmented", key: "analogMarkers", label: "Hour markers", options: [["ticks", "Ticks"], ["numbers", "Numbers"], ["dots", "Dots"], ["minimal", "Minimal"]] },
+                    { type: "toggle", key: "analogShowDate", label: "Show day and date under the dial" },
+                ]},
+            ],
+        },
+        {
+            id: "type", label: "Typography", icon: ICON.type,
+            sub: "Fonts and sizes. All fonts are bundled with the app.",
+            note: c => isAnalog(c) ? "The analog clock uses the Date font for its numbers and date line." : "",
+            groups: [
+                { title: "Day", show: isDigital, fields: [
+                    { type: "font",  key: "dayFont",    label: "Font" },
+                    { type: "range", key: "daySize",    label: "Size", min: 20, max: 300, step: 1, unit: "px" },
+                    { type: "range", key: "daySpacing", label: "Letter spacing", min: 0, max: 120, step: 1, unit: "px" },
+                ]},
+                { title: "Date", fields: [
+                    { type: "font",  key: "dateFont", label: "Font" },
+                    { type: "range", key: "dateSize", label: "Size", min: 10, max: 200, step: 1, unit: "px", show: isDigital },
+                ]},
+                { title: "Time", show: isDigital, fields: [
+                    { type: "font",  key: "timeFont", label: "Font" },
+                    { type: "range", key: "timeSize", label: "Size", min: 10, max: 300, step: 1, unit: "px" },
+                    { type: "pair",  label: "Decoration", keys: [["timePrefix", "Before time"], ["timeSuffix", "After time"]] },
+                ]},
+            ],
+        },
+        {
+            id: "layout", label: "Position", icon: ICON.layout,
+            sub: "Where the clock sits on each monitor.",
+            groups: [
+                { title: "Anchor", fields: [
+                    { type: "anchor", key: "clockAnchor" },
+                    { type: "range", key: "clockOffsetX", label: "Nudge horizontally", min: -1200, max: 1200, step: 1, unit: "px" },
+                    { type: "range", key: "clockOffsetY", label: "Nudge vertically",   min: -800,  max: 800,  step: 1, unit: "px" },
+                ]},
+                { title: "Line positions", show: isDigital, fields: [
+                    { type: "range", key: "dayY",  label: "Day",  min: -700, max: 400, step: 1, unit: "px" },
+                    { type: "range", key: "dateY", label: "Date", min: -700, max: 400, step: 1, unit: "px" },
+                    { type: "range", key: "timeY", label: "Time", min: -700, max: 400, step: 1, unit: "px" },
+                ]},
+            ],
+        },
+        {
+            id: "look", label: "Appearance", icon: ICON.look,
+            sub: "Colors, glow and ready-made themes.",
+            groups: [
+                { title: "Themes", fields: [{ type: "themes" }] },
+                { title: "Colors", fields: [
+                    { type: "color", key: "fontColor",   label: "Text and hands" },
+                    { type: "color", key: "accentColor", label: "Accent (second hand)", show: isAnalog },
+                ]},
+                { title: "Glow", fields: [
+                    { type: "toggle", key: "shadowEnabled", label: "Glow behind the clock" },
+                    { type: "color",  key: "shadowColor", label: "Glow color", show: c => c.shadowEnabled !== false },
+                    { type: "range",  key: "shadowBlur",  label: "Glow size", min: 0, max: 120, step: 1, unit: "px", show: c => c.shadowEnabled !== false },
+                ]},
+            ],
+        },
+        {
+            id: "wallpaper", label: "Wallpaper", icon: ICON.image,
+            sub: "The background behind your clock.",
+            groups: [
+                { title: "Background image", fields: [{ type: "background" }] },
+                { title: "Video wallpaper", fields: [
+                    { type: "video" },
+                    { type: "range", key: "videoVolume", label: "Volume", min: 0, max: 100, step: 1, unit: "%", scale: 100, show: c => c.videoEnabled },
+                    { type: "toggle", key: "videoLoop", label: "Loop video", show: c => c.videoEnabled },
+                ]},
+            ],
+        },
+    ];
 
-    // ── Anchor grid ───────────────────────────────────────────────────────────────
-    document.getElementById("anchorGrid").addEventListener("click", (e) => {
-        const btn = e.target.closest(".anchor-btn");
-        if (!btn) return;
-        currentAnchor = btn.dataset.pos;
-        document.querySelectorAll(".anchor-btn").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        document.getElementById("anchorLabel").textContent = anchorLabels[currentAnchor] || currentAnchor.toUpperCase();
+    // ── Rendering the controls ────────────────────────────────────────────────
+    function el(tag, attrs = {}, children = []) {
+        const node = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+            if (k === "class") node.className = v;
+            else if (k === "html") node.innerHTML = v;
+            else if (k === "text") node.textContent = v;
+            else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+            else node.setAttribute(k, v);
+        }
+        (Array.isArray(children) ? children : [children]).forEach(c => c && node.append(c));
+        return node;
+    }
+
+    function renderNav() {
+        const nav = $("nav");
+        nav.innerHTML = "";
+        PAGES.forEach(p => {
+            nav.append(el("button", {
+                class: p.id === page ? "active" : "",
+                "aria-current": p.id === page ? "page" : "false",
+                html: `${p.icon}<span>${p.label}</span>`,
+                onclick: () => { page = p.id; renderNav(); renderPage(); },
+            }));
+        });
+    }
+
+    function renderPage() {
+        closeFontPop();
+        const p = PAGES.find(x => x.id === page);
+        const root = $("controls");
+        const scroll = root.scrollTop;
+        root.innerHTML = "";
+        root.append(el("div", { class: "page-title", text: p.label }));
+        root.append(el("div", { class: "page-sub",   text: p.sub }));
+        const note = p.note?.(draft);
+        if (note) root.append(el("div", { class: "note", text: note }));
+
+        p.groups.forEach(g => {
+            if (g.show && !g.show(draft)) return;
+            const fields = g.fields.filter(f => !f.show || f.show(draft)).map(renderField);
+            root.append(el("section", { class: "group" }, [
+                el("div", { class: "group-title", text: g.title }),
+                el("div", { class: "card" }, fields),
+            ]));
+        });
+        root.scrollTop = scroll;
+    }
+
+    // Changing these alters which fields are visible.
+    const STRUCTURAL_KEYS = new Set(["clockStyle", "shadowEnabled", "clockEnabled"]);
+
+    function setValue(key, value) {
+        draft[key] = value;
+        markDirty();
+        if (key === "showSeconds") startPreviewClock();
+        else schedulePreview();
+        if (STRUCTURAL_KEYS.has(key)) renderPage();
+    }
+
+    function renderField(f) {
+        switch (f.type) {
+            case "toggle": {
+                const input = el("input", { type: "checkbox", "aria-label": f.label });
+                input.checked = draft[f.key] !== false;
+                input.addEventListener("change", () => setValue(f.key, input.checked));
+                return el("div", { class: "field" }, [
+                    el("div", { class: "field-head" }, [
+                        el("span", { class: "field-label", text: f.label }),
+                        el("label", { class: "switch" }, [input, el("span")]),
+                    ]),
+                    f.hint ? el("div", { class: "field-hint", text: f.hint }) : null,
+                ]);
+            }
+            case "segmented": {
+                const seg = el("div", { class: "segmented", role: "radiogroup", "aria-label": f.label });
+                f.options.forEach(([value, label]) => {
+                    const active = String(draft[f.key]) === value;
+                    seg.append(el("button", {
+                        class: active ? "active" : "", role: "radio", "aria-checked": String(active), text: label,
+                        onclick: () => {
+                            seg.querySelectorAll("button").forEach(b => { b.classList.remove("active"); b.setAttribute("aria-checked", "false"); });
+                            const btn = [...seg.children].find(b => b.textContent === label);
+                            btn.classList.add("active"); btn.setAttribute("aria-checked", "true");
+                            setValue(f.key, value);
+                        },
+                    }));
+                });
+                return el("div", { class: "field" }, [el("span", { class: "field-label", text: f.label }), seg]);
+            }
+            case "range": {
+                const scale = f.scale || 1;
+                const value = Math.round(Number(draft[f.key] ?? 0) * scale);
+                const range = el("input", { type: "range", min: f.min, max: f.max, step: f.step, "aria-label": f.label });
+                const numIn = el("input", { type: "number", class: "num", step: f.step, "aria-label": f.label });
+                const paint = v => {
+                    const clamped = Math.min(f.max, Math.max(f.min, v));
+                    range.style.setProperty("--pct", ((clamped - f.min) / (f.max - f.min)) * 100 + "%");
+                };
+                range.value = value; numIn.value = value; paint(value);
+                range.addEventListener("input", () => {
+                    numIn.value = range.value; paint(Number(range.value));
+                    setValue(f.key, Number(range.value) / scale);
+                });
+                numIn.addEventListener("input", () => {
+                    const v = Number(numIn.value);
+                    if (!Number.isFinite(v) || numIn.value === "") return;
+                    range.value = v; paint(v);
+                    setValue(f.key, v / scale);
+                });
+                return el("div", { class: "field" }, [
+                    el("span", { class: "field-label", text: f.label }),
+                    el("div", { class: "range-row" }, [range, numIn, el("span", { class: "unit", text: f.unit || "" })]),
+                ]);
+            }
+            case "pair": {
+                const cols = f.keys.map(([key, label]) => {
+                    const input = el("input", { type: "text", class: "text", spellcheck: "false" });
+                    input.value = draft[key] ?? "";
+                    input.addEventListener("input", () => setValue(key, input.value));
+                    return el("div", {}, [el("label", { text: label }), input]);
+                });
+                return el("div", { class: "field" }, [el("span", { class: "field-label", text: f.label }), el("div", { class: "pair" }, cols)]);
+            }
+            case "font": {
+                const family = draft[f.key];
+                const btn = el("button", { class: "font-btn", "aria-haspopup": "listbox", "aria-expanded": "false", "aria-label": `${f.label}: ${family}` }, [
+                    el("span", { class: "sample", text: sampleFor(family, sampleText()), style: `font-family:"${family}"` }),
+                    el("span", { class: "fname", text: family }),
+                ]);
+                btn.addEventListener("click", e => { e.stopPropagation(); openFontPop(f.key, btn); });
+                return el("div", { class: "field" }, [el("span", { class: "field-label", text: f.label }), btn]);
+            }
+            case "color": {
+                const swatch = el("input", { type: "color", class: "swatch", "aria-label": f.label });
+                const text   = el("input", { type: "text", class: "text", spellcheck: "false", style: "font-family:var(--mono);font-size:12px" });
+                const pick   = el("button", { class: "icon-btn", title: "Pick a color from the screen", "aria-label": `Pick ${f.label.toLowerCase()} from screen`, html: ICON.pick });
+                swatch.value = toHex(draft[f.key]);
+                text.value   = draft[f.key] || "";
+                swatch.addEventListener("input", () => { text.value = swatch.value; setValue(f.key, swatch.value); });
+                text.addEventListener("input", () => {
+                    if (isValidColor(text.value)) { swatch.value = toHex(text.value); setValue(f.key, text.value.trim()); }
+                });
+                pick.addEventListener("click", () => startScreenColorPicker(swatch));
+                return el("div", { class: "field" }, [
+                    el("span", { class: "field-label", text: f.label }),
+                    el("div", { class: "color-row" }, [swatch, text, pick]),
+                ]);
+            }
+            case "anchor": {
+                const grid = el("div", { class: "anchor-grid", role: "radiogroup", "aria-label": "Clock position" });
+                const name = el("span", { class: "anchor-name" });
+                const label = pos => pos === "middle-center" ? "Center" : pos.replace("middle-", "middle ").replace("-", " ");
+                ["top", "middle", "bottom"].forEach(v => ["left", "center", "right"].forEach(h => {
+                    const pos = `${v}-${h}`;
+                    const active = draft[f.key] === pos;
+                    grid.append(el("button", {
+                        class: active ? "active" : "", role: "radio", "aria-checked": String(active), "aria-label": label(pos), title: label(pos),
+                        onclick: e => {
+                            grid.querySelectorAll("button").forEach(b => { b.classList.remove("active"); b.setAttribute("aria-checked", "false"); });
+                            e.currentTarget.classList.add("active"); e.currentTarget.setAttribute("aria-checked", "true");
+                            name.textContent = label(pos);
+                            setValue(f.key, pos);
+                        },
+                    }));
+                }));
+                name.textContent = label(draft[f.key] || "middle-center");
+                return el("div", { class: "field" }, [el("div", { class: "anchor-wrap" }, [grid, name])]);
+            }
+            case "themes": {
+                const wrap = el("div", { class: "themes" });
+                THEMES.forEach(t => {
+                    wrap.append(el("button", {
+                        class: "theme", "aria-label": `Apply ${t.name} theme`,
+                        onclick: () => {
+                            const { name, ...values } = t;
+                            Object.assign(draft, values, { shadowEnabled: true });
+                            markDirty(); schedulePreview(); renderPage();
+                            toast(`${name} theme — press Apply to keep it`);
+                        },
+                    }, [
+                        el("div", { class: "theme-preview", text: "12:45",
+                            style: `font-family:"${t.timeFont}";color:${t.fontColor};text-shadow:0 0 ${Math.round(t.shadowBlur / 3)}px ${t.shadowColor}, 0 0 ${Math.round(t.shadowBlur / 6)}px ${t.shadowColor}` }),
+                        el("div", { class: "theme-name", text: t.name }),
+                    ]));
+                });
+                return el("div", { class: "field" }, [wrap]);
+            }
+            case "background": {
+                const p = ctxData.backgroundPath;
+                return el("div", { class: "field" }, [
+                    el("div", { class: "file-row" }, [
+                        el("span", { class: "file-path" + (p ? "" : " empty"), text: p || "No image selected", title: p || "" }),
+                        el("button", { class: "btn btn-ghost btn-sm", text: p ? "Change…" : "Choose…", onclick: async () => {
+                            const next = await ipcRenderer.invoke("choose-background-image");
+                            updateContext(next);
+                        }}),
+                    ]),
+                    el("div", { class: "field-hint", text: "Applies immediately. Used when no video wallpaper is playing." }),
+                ]);
+            }
+            case "video": {
+                const input = el("input", { type: "checkbox", "aria-label": "Play video wallpaper" });
+                input.checked = draft.videoEnabled === true;
+                input.disabled = !draft.videoPath;
+                input.addEventListener("change", async () => {
+                    const next = await ipcRenderer.invoke("set-video-enabled", input.checked);
+                    updateContext(next);
+                });
+                const p = draft.videoPath;
+                return el("div", { class: "field" }, [
+                    el("div", { class: "field-head" }, [
+                        el("span", { class: "field-label", text: "Play video wallpaper" }),
+                        el("label", { class: "switch" }, [input, el("span")]),
+                    ]),
+                    el("div", { class: "file-row" }, [
+                        el("span", { class: "file-path" + (p ? "" : " empty"), text: p || "No video selected", title: p || "" }),
+                        el("button", { class: "btn btn-ghost btn-sm", text: p ? "Change…" : "Choose…", onclick: async () => {
+                            const next = await ipcRenderer.invoke("choose-video-wallpaper");
+                            updateContext(next);
+                        }}),
+                    ]),
+                    el("div", { class: "field-hint", text: "Applies immediately. Video plays only while the live wallpaper is running and pauses when the desktop is covered." }),
+                ]);
+            }
+        }
+        return null;
+    }
+
+    // ── Font picker popover ──────────────────────────────────────────────────
+    function sampleText() {
+        const now = new Date();
+        return now.toLocaleDateString("en-US", { weekday: "long" }) + " " +
+               now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: draft.hour12 !== false });
+    }
+
+    function sampleFor(family, text) {
+        // Caps-only display fonts (Anurati) have no digits or lowercase, so
+        // preview just the weekday the way the wallpaper draws it.
+        if (ctxData.fonts.find(f => f.family === family)?.capsOnly) {
+            return new Date().toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
+        }
+        return text;
+    }
+
+    function openFontPop(key, anchorBtn) {
+        const pop = $("fontPop");
+        if (fontPopFor === key) { closeFontPop(); return; }
+        closeFontPop();
+        fontPopFor = key;
+        anchorBtn.setAttribute("aria-expanded", "true");
+        pop.innerHTML = "";
+
+        const cats = [...new Set(ctxData.fonts.map(f => f.category))];
+        let activeBtn = null;
+        cats.forEach(cat => {
+            pop.append(el("div", { class: "cat", text: cat }));
+            ctxData.fonts.filter(f => f.category === cat).forEach(f => {
+                const active = draft[key] === f.family;
+                const b = el("button", { class: active ? "active" : "", role: "option", "aria-selected": String(active),
+                    onclick: () => { closeFontPop(); setValue(key, f.family); renderPage(); },
+                }, [
+                    el("span", { class: "sample", text: sampleFor(f.family, "Sunday 12:45"), style: `font-family:"${f.family}"` }),
+                    el("span", { class: "fname", text: f.family }),
+                ]);
+                if (active) activeBtn = b;
+                pop.append(b);
+            });
+        });
+
+        const r = anchorBtn.getBoundingClientRect();
+        pop.hidden = false;
+        const top = Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 10);
+        pop.style.left = Math.max(10, r.left) + "px";
+        pop.style.top  = Math.max(10, top) + "px";
+        (activeBtn || pop.querySelector("button"))?.focus();
+        activeBtn?.scrollIntoView({ block: "center" });
+    }
+
+    function closeFontPop() {
+        $("fontPop").hidden = true;
+        fontPopFor = null;
+        document.querySelectorAll('.font-btn[aria-expanded="true"]').forEach(b => b.setAttribute("aria-expanded", "false"));
+    }
+
+    document.addEventListener("click", e => { if (!e.target.closest("#fontPop")) closeFontPop(); });
+
+    // ── Preview ──────────────────────────────────────────────────────────────
+    const previewCanvas = $("previewCanvas");
+    const previewCtx    = previewCanvas.getContext("2d");
+    let previewQueued   = false;
+    let previewTimer    = null;
+
+    function schedulePreview() {
+        if (previewQueued) return;
+        previewQueued = true;
+        requestAnimationFrame(() => { previewQueued = false; drawPreview(); });
+    }
+
+    function drawPreview() {
+        const { width, height } = ctxData.screenSize;
+        if (previewCanvas.width !== width)  previewCanvas.width  = width;
+        if (previewCanvas.height !== height) previewCanvas.height = height;
+        previewCtx.clearRect(0, 0, width, height);
+        clockRenderer.drawClock(previewCtx, draft, { x: 0, y: 0, width, height });
+    }
+
+    function startPreviewClock() {
+        clearTimeout(previewTimer);
+        const tick = () => { drawPreview(); previewTimer = setTimeout(tick, clockRenderer.msUntilNextTick(draft)); };
+        tick();
+    }
+
+    function updatePreviewBackground() {
+        const { width, height } = ctxData.screenSize;
+        $("monitor").style.aspectRatio = `${width} / ${height}`;
+        $("screenLabel").textContent = `${width} × ${height}`;
+
+        const img = $("previewImg"), vid = $("previewVideo");
+        const bg  = ctxData.backgroundPath;
+        const showVideo = draft.videoEnabled && draft.videoPath && fs.existsSync(draft.videoPath);
+
+        if (showVideo) {
+            const src = pathToFileURL(draft.videoPath).href;
+            if (vid.dataset.src !== src) { vid.dataset.src = src; vid.src = src; }
+            vid.hidden = false; img.hidden = true;
+            vid.play().catch(() => {});
+        } else {
+            vid.pause(); vid.removeAttribute("src"); delete vid.dataset.src; vid.load();
+            vid.hidden = true;
+            if (bg && fs.existsSync(bg)) { img.src = pathToFileURL(bg).href; img.hidden = false; }
+            else img.hidden = true;
+        }
+
+        const meta = $("previewMeta");
+        meta.innerHTML = "";
+        const chips = [
+            draft.clockStyle === "analog" ? "Analog" : "Digital",
+            showVideo ? "Video wallpaper" : (bg ? "Image wallpaper" : "No background set"),
+            draft.showSeconds ? "Updates every second" : "Updates every minute",
+        ];
+        chips.forEach(c => meta.append(el("span", { class: "chip", text: c })));
+    }
+
+    // ── Dirty tracking / apply ───────────────────────────────────────────────
+    function pickEditable(c) {
+        const out = {};
+        EDITABLE_KEYS.forEach(k => { if (k in c) out[k] = c[k]; });
+        return out;
+    }
+
+    function isDirty() {
+        return JSON.stringify(pickEditable(draft)) !== JSON.stringify(pickEditable(saved));
+    }
+
+    function markDirty() {
+        const dirty = isDirty();
+        $("dirty").classList.toggle("on", dirty);
+        $("dirty").textContent = dirty ? "Unsaved changes" : "All changes applied";
+        $("applyBtn").setAttribute("aria-disabled", String(!dirty));
+        updatePreviewMetaOnly();
+    }
+
+    function updatePreviewMetaOnly() {
+        const chips = $("previewMeta").children;
+        if (chips[0]) chips[0].textContent = draft.clockStyle === "analog" ? "Analog" : "Digital";
+        if (chips[2]) chips[2].textContent = draft.showSeconds ? "Updates every second" : "Updates every minute";
+    }
+
+    async function apply() {
+        if (!isDirty()) return;
+        await ipcRenderer.invoke("save-config", pickEditable(draft));
+        saved = { ...saved, ...pickEditable(draft) };
+        markDirty();
+        toast("Applied to your wallpaper");
+    }
+
+    function resetToDefaults() {
+        Object.assign(draft, clockRenderer.DEFAULTS);
+        markDirty(); schedulePreview(); renderPage();
+        toast("Defaults restored — press Apply to keep them");
+    }
+
+    function updateContext(next) {
+        if (!next) return;
+        ctxData = next;
+        // Video/background are applied immediately by the main process; keep
+        // the user's unsaved clock edits.
+        for (const k of ["videoEnabled", "videoPath"]) { draft[k] = next.config[k]; saved[k] = next.config[k]; }
+        updateLive();
+        updatePreviewBackground();
+        renderPage();
+    }
+
+    function updateLive() {
+        const on = ctxData.liveActive;
+        $("liveToggle").checked = on;
+        $("liveDot").classList.toggle("on", on);
+        $("liveText").textContent = on ? "Running" : "Stopped";
+        $("liveHint").textContent = on
+            ? (draft.videoEnabled ? "Playing your video with the clock on top." : "The clock is drawn onto your wallpaper.")
+            : "Start to keep the clock updated on your desktop.";
+    }
+
+    $("liveToggle").addEventListener("change", async e => {
+        const next = await ipcRenderer.invoke("set-live-enabled", e.target.checked);
+        updateContext(next);
+    });
+    $("applyBtn").addEventListener("click", apply);
+    $("resetBtn").addEventListener("click", resetToDefaults);
+    $("reloadBtn").addEventListener("click", async () => {
+        if (isDirty()) await apply();
+        ipcRenderer.send("reload-wallpaper");
+        toast("Reloading wallpaper…");
+    });
+    document.addEventListener("keydown", e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); apply(); }
+        if (e.key === "Escape") { if (screenPicker) finishScreenColorPicker(); else closeFontPop(); }
     });
 
-    function setAnchor(pos) {
-        currentAnchor = pos || "middle-center";
-        document.querySelectorAll(".anchor-btn").forEach(b => {
-            b.classList.toggle("active", b.dataset.pos === currentAnchor);
-        });
-        document.getElementById("anchorLabel").textContent = anchorLabels[currentAnchor] || currentAnchor.toUpperCase();
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    let toastTimer = null;
+    function toast(msg) {
+        const t = $("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
     }
 
-    // ── Populate fields ───────────────────────────────────────────────────────────
-    function populateFields(cfg) {
-        document.getElementById("dayFont").value    = cfg.dayFont    || DEFAULTS.dayFont;
-        document.getElementById("daySize").value    = cfg.daySize    ?? DEFAULTS.daySize;
-        document.getElementById("daySpacing").value = Number(cfg.daySpacing ?? DEFAULTS.daySpacing);
-        document.getElementById("dayY").value       = cfg.dayY       ?? DEFAULTS.dayY;
-
-        document.getElementById("dateFont").value   = cfg.dateFont   || DEFAULTS.dateFont;
-        document.getElementById("dateSize").value   = cfg.dateSize   ?? DEFAULTS.dateSize;
-        document.getElementById("dateY").value      = cfg.dateY      ?? DEFAULTS.dateY;
-
-        document.getElementById("timeFont").value   = cfg.timeFont   || DEFAULTS.timeFont;
-        document.getElementById("timeSize").value   = cfg.timeSize   ?? DEFAULTS.timeSize;
-        document.getElementById("timeY").value      = cfg.timeY      ?? DEFAULTS.timeY;
-        document.getElementById("timePrefix").value = cfg.timePrefix ?? DEFAULTS.timePrefix;
-        document.getElementById("timeSuffix").value = cfg.timeSuffix ?? DEFAULTS.timeSuffix;
-        document.getElementById("hour12").checked   = cfg.hour12 !== false;
-
-        setAnchor(cfg.clockAnchor || DEFAULTS.clockAnchor);
-        document.getElementById("clockOffsetX").value = cfg.clockOffsetX ?? DEFAULTS.clockOffsetX;
-        document.getElementById("clockOffsetY").value = cfg.clockOffsetY ?? DEFAULTS.clockOffsetY;
-        document.getElementById("canvasWidth").value  = cfg.canvasWidth  || DEFAULTS.canvasWidth;
-        document.getElementById("canvasHeight").value = cfg.canvasHeight || DEFAULTS.canvasHeight;
-
-        const fc = cfg.fontColor   || DEFAULTS.fontColor;
-        const sc = cfg.shadowColor || DEFAULTS.shadowColor;
-        document.getElementById("fontColor").value         = fc;
-        document.getElementById("fontColorPicker").value  = toHex(fc);
-        document.getElementById("shadowColor").value      = sc;
-        document.getElementById("shadowColorPicker").value = toHex(sc);
-        document.getElementById("shadowToggle").checked   = cfg.shadowEnabled !== false;
-        document.getElementById("shadowBlur").value       = cfg.shadowBlur ?? DEFAULTS.shadowBlur;
-        document.getElementById("interval").value         = cfg.interval    ?? DEFAULTS.interval;
+    const colorProbe = document.createElement("canvas").getContext("2d");
+    function isValidColor(value) {
+        if (!value || !value.trim()) return false;
+        colorProbe.fillStyle = "#010203";
+        colorProbe.fillStyle = value.trim();
+        return colorProbe.fillStyle !== "#010203" || value.trim().toLowerCase() === "#010203";
     }
 
-    // ── Flush fields to config ────────────────────────────────────────────────────
-    function flushFieldsToConfig() {
-        fullConfig.clockAnchor  = currentAnchor;
-        fullConfig.clockOffsetX = parseInt(document.getElementById("clockOffsetX").value) || 0;
-        fullConfig.clockOffsetY = parseInt(document.getElementById("clockOffsetY").value) || 0;
-
-        fullConfig.dayFont    = document.getElementById("dayFont").value;
-        fullConfig.daySize    = parseInt(document.getElementById("daySize").value);
-        fullConfig.daySpacing = parseInt(document.getElementById("daySpacing").value) || 0;
-        fullConfig.dayY       = parseInt(document.getElementById("dayY").value);
-
-        fullConfig.dateFont = document.getElementById("dateFont").value;
-        fullConfig.dateSize = parseInt(document.getElementById("dateSize").value);
-        fullConfig.dateY    = parseInt(document.getElementById("dateY").value);
-
-        fullConfig.timeFont   = document.getElementById("timeFont").value;
-        fullConfig.timeSize   = parseInt(document.getElementById("timeSize").value);
-        fullConfig.timeY      = parseInt(document.getElementById("timeY").value);
-        fullConfig.timePrefix = document.getElementById("timePrefix").value;
-        fullConfig.timeSuffix = document.getElementById("timeSuffix").value;
-        fullConfig.hour12     = document.getElementById("hour12").checked;
-
-        fullConfig.fontColor     = document.getElementById("fontColor").value;
-        fullConfig.shadowEnabled = document.getElementById("shadowToggle").checked;
-        fullConfig.shadowColor   = document.getElementById("shadowColor").value;
-        fullConfig.shadowBlur    = parseInt(document.getElementById("shadowBlur").value);
-        fullConfig.interval      = Math.max(1, parseInt(document.getElementById("interval").value) || 60);
-
-        fullConfig.canvasWidth  = parseInt(document.getElementById("canvasWidth").value);
-        fullConfig.canvasHeight = parseInt(document.getElementById("canvasHeight").value);
-    }
-
-    // ── Load config ───────────────────────────────────────────────────────────────
-    async function loadConfig() {
-        const userDataPath = await ipcRenderer.invoke("get-user-data-path");
-        configPath = path.join(userDataPath, "config.json");
-        try { fullConfig = JSON.parse(fs.readFileSync(configPath, "utf-8")); }
-        catch (e) { fullConfig = {}; }
-        populateFields(fullConfig);
-        updatePreview();
-    }
-
-    // ── Save ──────────────────────────────────────────────────────────────────────
-    function save() {
-        // Re-read from disk first: the main process may have changed keys we
-        // don't edit here (videoEnabled, liveEnabled, …) since the window opened.
-        try { fullConfig = JSON.parse(fs.readFileSync(configPath, "utf-8")); }
-        catch (e) { /* keep in-memory copy */ }
-        flushFieldsToConfig();
-        fs.writeFileSync(configPath, JSON.stringify(fullConfig, null, 2));
-        ipcRenderer.send("settings-updated");
-        showToast("Settings saved!");
-        updatePreview();
-    }
-
-    function reloadWallpaper() {
-        save();
-        ipcRenderer.send("reload-wallpaper");
-        showToast("Reloading wallpaper...");
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────────
+    // <input type="color"> only accepts #rrggbb; config may hold any CSS color.
     function toHex(color) {
-        if (!color) return "#ffffff";
-
-        // <input type="color"> only accepts six-digit RGB hex values.  The
-        // config also accepts CSS colors (for example "red" or "rgb(...)"),
-        // so normalize through the browser's CSS parser before assigning it.
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-        context.fillStyle = color;
-        const parsed = context.fillStyle;
-        if (typeof parsed !== "string") return "#ffffff";
-        if (/^#[0-9a-f]{3}$/i.test(parsed)) {
-            return "#" + [...parsed.slice(1)].map(c => c + c).join("");
-        }
+        if (!color || !isValidColor(color)) return "#ffffff";
+        colorProbe.fillStyle = color;
+        const parsed = colorProbe.fillStyle;
         if (/^#[0-9a-f]{6}$/i.test(parsed)) return parsed;
+        const m = parsed.match(/\d+/g);
+        if (m && m.length >= 3) return "#" + m.slice(0, 3).map(n => Number(n).toString(16).padStart(2, "0")).join("");
         return "#ffffff";
     }
 
-    document.getElementById("fontColorPicker").addEventListener("input", (e) => {
-        document.getElementById("fontColor").value = e.target.value;
-        updatePreview();
-    });
-    document.getElementById("shadowColorPicker").addEventListener("input", (e) => {
-        document.getElementById("shadowColor").value = e.target.value;
-    });
-    document.getElementById("fontColor").addEventListener("input", (e) => {
-        if (e.target.value.startsWith("#")) document.getElementById("fontColorPicker").value = toHex(e.target.value);
-        updatePreview();
-    });
-    document.getElementById("shadowColor").addEventListener("input", (e) => {
-        if (e.target.value.startsWith("#")) document.getElementById("shadowColorPicker").value = toHex(e.target.value);
-    });
+    async function loadAllFonts() {
+        await Promise.all(ctxData.fonts.map(async f => {
+            try {
+                const face = new FontFace(f.family, `url("${pathToFileURL(f.path).href}")`);
+                document.fonts.add(await face.load());
+            } catch (e) { console.warn("Font failed:", f.family, e.message); }
+        }));
+    }
 
-    // Capture each monitor before showing the full-screen picker.  This lets
-    // the user sample the desktop, other apps, and wallpapers without the
-    // picker window covering the original pixels.
+    // ── Screen color picker ──────────────────────────────────────────────────
+    // Capture each monitor before showing the full-screen picker so the user
+    // can sample the desktop without the picker covering the pixels.
     let screenPicker = null;
 
     async function startScreenColorPicker(target) {
         if (screenPicker) return;
-
         let prepared = false;
         try {
             const layout = await ipcRenderer.invoke("prepare-screen-color-picker");
             if (!layout) return;
             prepared = true;
 
-            const overlay = document.getElementById("screenPickerOverlay");
+            const overlay = $("screenPickerOverlay");
             const sources = await desktopCapturer.getSources({
-                types: ["screen"],
-                thumbnailSize: { width: 4096, height: 4096 },
-                fetchWindowIcons: false
+                types: ["screen"], thumbnailSize: { width: 4096, height: 4096 }, fetchWindowIcons: false
             });
             const virtual = layout.virtualBounds;
             const displays = layout.displays.map((display, index) => {
                 const source = sources.find(s => String(s.display_id) === String(display.id)) || sources[index];
                 if (!source || source.thumbnail.isEmpty()) return null;
-
                 const image = document.createElement("img");
                 image.src = source.thumbnail.toDataURL();
-                image.style.left = `${display.bounds.x - virtual.x}px`;
-                image.style.top = `${display.bounds.y - virtual.y}px`;
-                image.style.width = `${display.bounds.width}px`;
+                image.style.left   = `${display.bounds.x - virtual.x}px`;
+                image.style.top    = `${display.bounds.y - virtual.y}px`;
+                image.style.width  = `${display.bounds.width}px`;
                 image.style.height = `${display.bounds.height}px`;
                 overlay.appendChild(image);
                 return { display, image };
             }).filter(Boolean);
             if (!displays.length) throw new Error("No screen thumbnails were captured");
 
-            // Do not expose the overlay until every thumbnail has dimensions;
-            // otherwise a fast click can produce a 0x0 canvas sample.
             await Promise.all(displays.map(({ image }) => {
                 if (image.complete && image.naturalWidth > 0) return undefined;
                 return new Promise((resolve, reject) => {
@@ -924,12 +1045,12 @@
             await ipcRenderer.invoke("show-screen-color-picker");
         } catch (error) {
             console.error("Could not capture the screen for color picking:", error);
-            const overlay = document.getElementById("screenPickerOverlay");
-            overlay?.classList.remove("active");
-            overlay?.querySelectorAll("img").forEach(image => image.remove());
+            const overlay = $("screenPickerOverlay");
+            overlay.classList.remove("active");
+            overlay.querySelectorAll("img").forEach(i => i.remove());
             screenPicker = null;
             if (prepared) await ipcRenderer.invoke("finish-screen-color-picker");
-            showToast("Screen color picking is unavailable");
+            toast("Screen color picking is unavailable");
         }
     }
 
@@ -937,93 +1058,51 @@
         if (!screenPicker) return;
         const { overlay } = screenPicker;
         overlay.classList.remove("active");
-        overlay.querySelectorAll("img").forEach(image => image.remove());
+        overlay.querySelectorAll("img").forEach(i => i.remove());
         screenPicker = null;
         void ipcRenderer.invoke("finish-screen-color-picker");
     }
 
-    document.getElementById("screenPickerOverlay").addEventListener("click", (event) => {
+    $("screenPickerOverlay").addEventListener("click", event => {
         if (!screenPicker) return;
-        const x = event.clientX;
-        const y = event.clientY;
-        const picked = screenPicker.displays.find(({ display }) =>
-            x >= display.bounds.x - screenPicker.virtual.x &&
-            x < display.bounds.x - screenPicker.virtual.x + display.bounds.width &&
-            y >= display.bounds.y - screenPicker.virtual.y &&
-            y < display.bounds.y - screenPicker.virtual.y + display.bounds.height
-        );
+        const { clientX: x, clientY: y } = event;
+        const v = screenPicker.virtual;
+        const picked = screenPicker.displays.find(({ display: d }) =>
+            x >= d.bounds.x - v.x && x < d.bounds.x - v.x + d.bounds.width &&
+            y >= d.bounds.y - v.y && y < d.bounds.y - v.y + d.bounds.height);
         if (!picked) return;
 
-        const { display, image } = picked;
-        const localX = x - (display.bounds.x - screenPicker.virtual.x);
-        const localY = y - (display.bounds.y - screenPicker.virtual.y);
-        const pixelX = Math.min(image.naturalWidth - 1, Math.max(0, Math.floor(localX * image.naturalWidth / display.bounds.width)));
-        const pixelY = Math.min(image.naturalHeight - 1, Math.max(0, Math.floor(localY * image.naturalHeight / display.bounds.height)));
-        const canvas = document.createElement("canvas");
-        canvas.width = canvas.height = 1;
-        const context = canvas.getContext("2d");
-        context.drawImage(image, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
-        const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
-        const color = `#${[r, g, b].map(value => value.toString(16).padStart(2, "0")).join("")}`;
-        screenPicker.target.value = color;
+        const { display: d, image } = picked;
+        const lx = x - (d.bounds.x - v.x), ly = y - (d.bounds.y - v.y);
+        const px = Math.min(image.naturalWidth - 1,  Math.max(0, Math.floor(lx * image.naturalWidth  / d.bounds.width)));
+        const py = Math.min(image.naturalHeight - 1, Math.max(0, Math.floor(ly * image.naturalHeight / d.bounds.height)));
+        const c = document.createElement("canvas");
+        c.width = c.height = 1;
+        const cx = c.getContext("2d");
+        cx.drawImage(image, px, py, 1, 1, 0, 0, 1, 1);
+        const [r, g, b] = cx.getImageData(0, 0, 1, 1).data;
+        screenPicker.target.value = "#" + [r, g, b].map(n => n.toString(16).padStart(2, "0")).join("");
         screenPicker.target.dispatchEvent(new Event("input", { bubbles: true }));
         finishScreenColorPicker();
     });
 
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && screenPicker) finishScreenColorPicker();
-    });
+    // ── Boot ─────────────────────────────────────────────────────────────────
+    (async function init() {
+        ctxData = await ipcRenderer.invoke("get-settings-context");
+        saved = { ...ctxData.config };
+        draft = { ...ctxData.config };
+        $("version").textContent = "v" + ctxData.version;
 
-    document.getElementById("pickFontColor").addEventListener("click", () => startScreenColorPicker(document.getElementById("fontColorPicker")));
-    document.getElementById("pickShadowColor").addEventListener("click", () => startScreenColorPicker(document.getElementById("shadowColorPicker")));
-    document.getElementById("hour12").addEventListener("change", updatePreview);
-    document.getElementById("timePrefix").addEventListener("input", updatePreview);
-    document.getElementById("timeSuffix").addEventListener("input", updatePreview);
+        renderNav();
+        renderPage();
+        updateLive();
+        updatePreviewBackground();
+        markDirty();
 
-    function showToast(msg) {
-        const t = document.getElementById("toast");
-        t.textContent = msg;
-        t.classList.add("show");
-        setTimeout(() => t.classList.remove("show"), 2500);
-    }
-
-    function switchTab(name, event) {
-        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-        event.target.classList.add("active");
-        document.getElementById("tab-" + name).classList.add("active");
-        if (name === "preview") updatePreview();
-    }
-
-    function updatePreview() {
-        const now  = new Date();
-        const day  = now.toLocaleDateString("en-US", { weekday: "long" });
-        const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-        const time = now.toLocaleTimeString("en-US", {
-            hour: "2-digit", minute: "2-digit",
-            hour12: document.getElementById("hour12").checked
-        });
-        const prefix = document.getElementById("timePrefix").value;
-        const suffix = document.getElementById("timeSuffix").value;
-        const color  = document.getElementById("fontColor").value || "#ffffff";
-
-        document.getElementById("prev-day").textContent  = day.toUpperCase();
-        document.getElementById("prev-day").style.color  = color;
-        document.getElementById("prev-date").textContent = date;
-        document.getElementById("prev-date").style.color = color;
-        document.getElementById("prev-time").textContent = prefix + time + suffix;
-        document.getElementById("prev-time").style.color = color;
-    }
-
-    function updateClock() {
-        document.getElementById("clock").textContent = new Date().toLocaleTimeString("en-US", {
-            hour: "2-digit", minute: "2-digit", hour12: true
-        });
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    loadConfig();
+        await loadAllFonts();
+        renderPage();          // re-measure font samples
+        startPreviewClock();
+    })().catch(e => console.error("settings init failed:", e));
 </script>
 </body>
 </html>

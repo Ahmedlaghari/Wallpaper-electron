@@ -1,6 +1,6 @@
 {
   "name": "live-wallpaper",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "live wallapaper",
   "author": "Ahmed Ali Laghari",
   "main": "main.js",
@@ -24,9 +24,6 @@
       "icon": "icon.png",
       "artifactName": "Live-Wallpaper-Setup-${version}.${ext}"
     },
-    "nsis": {
-      "include": "installer.nsh"
-    },
     "publish": {
       "provider": "github",
       "owner": "Ahmedlaghari",
@@ -42,6 +39,7 @@
     "canvas": "^3.2.1",
     "electron-as-wallpaper": "^2.0.3",
     "electron-updater": "^6.8.3",
+    "opentype.js": "^1.3.4",
     "sharp": "^0.34.5",
     "wallpaper": "^7.2.1"
   }

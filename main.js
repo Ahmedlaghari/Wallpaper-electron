@@ -6,8 +6,11 @@ const fs   = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
-const { createCanvas, loadImage, registerFont } = require("canvas");
+const { createCanvas, loadImage } = require("canvas");
+const opentype = require("opentype.js");
 const { autoUpdater } = require("electron-updater");
+const clockRenderer = require("./clock-renderer");
+const fontCatalog   = require("./font-catalog");
 const execFileAsync = promisify(execFile);
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
@@ -74,7 +77,10 @@ function configureWindowsStartup() {
     try {
         app.setLoginItemSettings({
             openAtLogin: true,
-            path: process.execPath
+            path: process.execPath,
+            // Same value name the old NSIS hook used, so upgraded installs
+            // keep a single startup entry.
+            name: "Live Wallpaper"
         });
         console.log("Windows startup enabled for:", process.execPath);
     } catch (e) {
@@ -86,42 +92,7 @@ function configureWindowsStartup() {
 function ensureConfigExists() {
     if (fs.existsSync(configPath)) return;
     const defaultConfig = {
-        // Clock visibility & layout
-        clockEnabled:  true,
-        clockAnchor:   "middle-center",
-        clockOffsetX:  0,
-        clockOffsetY:  0,
-
-        // Day text
-        dayFont:    "Anurati",
-        daySize:    110,
-        daySpacing: 10,
-        dayY:       -270,
-
-        // Date text
-        dateFont: "Rajdhani",
-        dateSize: 45,
-        dateY:    -170,
-
-        // Time text
-        timeFont:   "Rajdhani",
-        timeSize:   50,
-        timeY:      -80,
-        timePrefix: "- ",
-        timeSuffix: " -",
-        hour12:     true,
-        showSeconds: false,
-
-        // Clock style
-        fontColor:     "white",
-        shadowEnabled: true,
-        shadowColor:   "black",
-        shadowBlur:    40,
-
-        // Static wallpaper timing
-        interval:     60,
-        canvasWidth:  1920,
-        canvasHeight: 1080,
+        ...clockRenderer.DEFAULTS,
 
         // Video wallpaper
         videoEnabled: false,
@@ -132,29 +103,40 @@ function ensureConfigExists() {
         // Live wallpaper (persisted so it survives app restarts)
         liveEnabled: false,
     };
-    fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
+    writeConfig(defaultConfig);
     console.log("Created default config at", configPath);
 }
 
-// ─── Clock layout ─────────────────────────────────────────────────────────────
-function getClockBase(config, width, height) {
-    const anchor  = config.clockAnchor || "middle-center";
-    const offsetX = Number(config.clockOffsetX) || 0;
-    const offsetY = Number(config.clockOffsetY) || 0;
-    const [vAnchor, hAnchor] = anchor.split("-");
-    let baseX, baseY, textAlign;
-    if (hAnchor === "left") {
-        baseX = Math.round(width * 0.08) + offsetX; textAlign = "left";
-    } else if (hAnchor === "right") {
-        baseX = Math.round(width * 0.92) + offsetX; textAlign = "right";
-    } else {
-        baseX = Math.round(width / 2) + offsetX; textAlign = "center";
-    }
-    if (vAnchor === "top")         baseY = Math.round(height * 0.15) + offsetY;
-    else if (vAnchor === "bottom") baseY = Math.round(height * 0.82) + offsetY;
-    else                           baseY = Math.round(height / 2) + offsetY;
-    return { baseX, baseY, textAlign };
+// ─── Fonts ────────────────────────────────────────────────────────────────────
+function getFontList() {
+    const fontsDir = getFontsDir();
+    return fontCatalog
+        .map(f => ({ ...f, path: path.join(fontsDir, f.file) }))
+        .filter(f => fs.existsSync(f.path));
 }
+
+// Static wallpapers draw text as glyph outlines read straight from the bundled
+// TTF files. node-canvas' registerFont can't be used: on Windows it registers
+// fonts privately through GDI, which its Pango build never sees, so text only
+// worked if the fonts were installed system-wide. Renderers load the same files
+// with FontFace. Nothing is ever installed into Windows.
+const outlineFontCache = new Map();   // family → opentype Font | null
+
+function getOutlineFont(family) {
+    if (outlineFontCache.has(family)) return outlineFontCache.get(family);
+    const entry = getFontList().find(f => f.family === family);
+    let parsed = null;
+    if (entry) {
+        try { parsed = opentype.loadSync(entry.path); }
+        catch (e) { console.error(`Could not read font ${family}:`, e.message); }
+    } else {
+        console.warn(`Font "${family}" is not bundled — using the system font instead.`);
+    }
+    outlineFontCache.set(family, parsed);
+    return parsed;
+}
+
+const outlineTextEngine = clockRenderer.createOutlineTextEngine(getOutlineFont);
 
 // ─── Wallpaper API (static mode) ─────────────────────────────────────────────
 async function setDesktopWallpaper(imagePath, options = {}) {
@@ -318,7 +300,7 @@ async function generateWallpaper() {
         const canvas = createCanvas(width, height);
         const ctx    = canvas.getContext("2d");
         drawImageCover(ctx, cachedBgImage, 0, 0, width, height);
-        if (config.clockEnabled !== false) _drawClock(ctx, config, width, height);
+        clockRenderer.drawClock(ctx, config, { x: 0, y: 0, width, height }, new Date(), outlineTextEngine);
 
         const filePath = path.join(app.getPath("userData"), `wallpaper-${wallpaperWriteIndex}-display-${i}.jpeg`);
         const tmpPath  = filePath + ".tmp";
@@ -352,58 +334,6 @@ async function generateWallpaper() {
     console.log(`Applied ${outputPaths.length} wallpaper(s).`);
 }
 
-function _drawClock(ctx, config, width, height) {
-    const now  = new Date();
-    const day  = now.toLocaleDateString("en-US", { weekday: "long" });
-    const date = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-    const time = now.toLocaleTimeString("en-US", {
-        hour: "2-digit", minute: "2-digit", hour12: config.hour12 !== false
-    });
-
-    const { baseX, baseY, textAlign } = getClockBase(config, width, height);
-    ctx.fillStyle    = config.fontColor || "white";
-    ctx.textBaseline = "alphabetic";
-
-    if (config.shadowEnabled !== false) {
-        ctx.shadowBlur  = config.shadowBlur || 40;
-        ctx.shadowColor = config.shadowColor || "black";
-    } else {
-        ctx.shadowBlur  = 0;
-        ctx.shadowColor = "transparent";
-    }
-
-    const text          = day.toUpperCase();
-    const letterSpacing = Number(config.daySpacing ?? 10);
-    ctx.font            = `${config.daySize || 110}px "${config.dayFont || "Anurati"}"`;
-
-    let totalWidth = 0;
-    for (let i = 0; i < text.length; i++) totalWidth += ctx.measureText(text[i]).width;
-    totalWidth += letterSpacing * (text.length - 1);
-
-    let startX;
-    if (textAlign === "left")       startX = baseX;
-    else if (textAlign === "right") startX = baseX - totalWidth;
-    else                            startX = baseX - totalWidth / 2;
-
-    const dayDrawY = baseY + (config.dayY ?? -270);
-    let x = startX;
-    for (let i = 0; i < text.length; i++) {
-        ctx.fillText(text[i], x, dayDrawY);
-        x += ctx.measureText(text[i]).width + letterSpacing;
-    }
-
-    const dayCenterX = startX + totalWidth / 2;
-    ctx.textAlign    = "center";
-    ctx.font = `${config.dateSize || 45}px "${config.dateFont || "Rajdhani"}"`;
-    ctx.fillText(date, dayCenterX, baseY + (config.dateY ?? -170));
-    ctx.font = `${config.timeSize || 50}px "${config.timeFont || "Rajdhani"}"`;
-    ctx.fillText(
-        (config.timePrefix ?? "- ") + time + (config.timeSuffix ?? " -"),
-        dayCenterX,
-        baseY + (config.timeY ?? -80)
-    );
-}
-
 // ─── Run / schedule static updates ───────────────────────────────────────────
 async function runWallpaperUpdate({ skipIfBusy = false } = {}) {
     if (skipIfBusy && wallpaperUpdateInProgress) {
@@ -421,25 +351,27 @@ async function runWallpaperUpdate({ skipIfBusy = false } = {}) {
 
 function stopStaticUpdates() {
     if (!updateTimer) return;
-    clearInterval(updateTimer);
+    clearTimeout(updateTimer);
     updateTimer = null;
     console.log("Static updates stopped.");
 }
 
+// Repaint exactly when the drawn clock changes: on every minute boundary, or
+// every second when seconds are shown.
 function startStaticUpdates() {
     stopStaticUpdates();
-    const config          = readConfig();
-    const intervalSeconds = Number.parseInt(config.interval, 10);
-    const requestedDelay  = config.showSeconds === true
-        ? 1
-        : (Number.isFinite(intervalSeconds) ? intervalSeconds : 60);
-    const delay           = Math.max(1, requestedDelay) * 1000;
-    console.log(`Static updates scheduled every ${delay / 1000}s.`);
-    updateTimer = setInterval(async () => {
-        if (liveWindows.length > 0) return;
-        try { await runWallpaperUpdate({ skipIfBusy: true }); }
-        catch (e) { console.error("Scheduled wallpaper update failed:", e); }
-    }, delay);
+    const schedule = () => {
+        const delay = clockRenderer.msUntilNextTick(readConfig());
+        updateTimer = setTimeout(async () => {
+            if (liveWindows.length === 0) {
+                try { await runWallpaperUpdate({ skipIfBusy: true }); }
+                catch (e) { console.error("Scheduled wallpaper update failed:", e); }
+            }
+            if (updateTimer) schedule();
+        }, delay);
+    };
+    schedule();
+    console.log("Static updates scheduled on clock ticks.");
 }
 
 // ─── IPC ──────────────────────────────────────────────────────────────────────
@@ -456,8 +388,59 @@ ipcMain.on("settings-updated", () => {
     refreshLiveWallpaper();
 });
 
-ipcMain.handle("get-user-data-path",      () => app.getPath("userData"));
 ipcMain.handle("get-live-wallpaper-data", event => getLiveWallpaperData(event.sender));
+
+// ─── Settings window IPC ──────────────────────────────────────────────────────
+// Keys older versions wrote that no longer do anything.
+const OBSOLETE_CONFIG_KEYS = ["interval", "canvasWidth", "canvasHeight"];
+
+function getSettingsContext() {
+    const primary = screen.getPrimaryDisplay();
+    return {
+        config:         { ...clockRenderer.DEFAULTS, ...readConfig() },
+        defaults:       clockRenderer.DEFAULTS,
+        backgroundPath: readBackgroundPath(),
+        fonts:          getFontList(),
+        screenSize:     { width: primary.bounds.width, height: primary.bounds.height },
+        liveActive:     isLiveActive(),
+        version:        app.getVersion(),
+    };
+}
+
+ipcMain.handle("get-settings-context", () => getSettingsContext());
+
+ipcMain.handle("save-config", (_event, patch) => {
+    // Merge onto the file on disk so keys owned by the main process
+    // (liveEnabled, videoPath, …) are never clobbered by a stale window.
+    const config = { ...readConfig(), ...(patch || {}) };
+    OBSOLETE_CONFIG_KEYS.forEach(k => delete config[k]);
+    writeConfig(config);
+    startStaticUpdates();
+    refreshLiveWallpaper();
+    return true;
+});
+
+ipcMain.handle("choose-background-image", async () => {
+    await chooseBackgroundImage();
+    return getSettingsContext();
+});
+
+ipcMain.handle("choose-video-wallpaper", async () => {
+    await chooseVideoWallpaper();
+    return getSettingsContext();
+});
+
+ipcMain.handle("set-video-enabled", (_event, enabled) => {
+    setVideoEnabled(enabled === true);
+    return getSettingsContext();
+});
+
+ipcMain.handle("set-live-enabled", async (_event, enabled) => {
+    setLiveEnabled(enabled === true);
+    if (enabled) await startLiveWallpaper();
+    else stopLiveWallpaper();
+    return getSettingsContext();
+});
 
 // The screen picker uses a snapshot so the picker window itself never hides
 // the pixel being sampled.  The renderer captures the screens while this
@@ -498,38 +481,76 @@ ipcMain.handle("finish-screen-color-picker", () => {
     settingsWindow.colorPickerBounds = null;
 });
 
-// ─── Background / video picker ────────────────────────────────────────────────
-async function getImage() {
-    const result = await dialog.showOpenDialog({
-        filters: [{ name: "Images", extensions: ["jpg", "png"] }]
-    });
-    if (!result.canceled && result.filePaths.length > 0) {
-        fs.writeFileSync(bgPathFile, result.filePaths[0]);
-        cachedBgPath  = null;
-        cachedBgImage = null;
-        console.log("Background image set to:", result.filePaths[0]);
-    }
+// ─── Background / video ───────────────────────────────────────────────────────
+function isLiveActive() {
+    return liveWindows.length > 0 || clockOnlyWallpaperActive;
 }
 
-async function pickVideoWallpaper() {
+async function chooseBackgroundImage() {
+    const result = await dialog.showOpenDialog({
+        title: "Select Background Image",
+        filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] }]
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+
+    fs.writeFileSync(bgPathFile, result.filePaths[0]);
+    cachedBgPath  = null;
+    cachedBgImage = null;
+    console.log("Background image set to:", result.filePaths[0]);
+
+    if (isLiveActive()) refreshLiveWallpaper();
+    else await runWallpaperUpdate();
+    return result.filePaths[0];
+}
+
+async function chooseVideoWallpaper() {
     const result = await dialog.showOpenDialog({
         title: "Select Video Wallpaper",
         filters: [{ name: "Videos", extensions: ["mp4", "webm", "mov", "mkv"] }]
     });
-    if (result.canceled || !result.filePaths.length) return;
+    if (result.canceled || !result.filePaths.length) return null;
 
     const videoPath = result.filePaths[0];
     const config    = readConfig();
     config.videoEnabled = true;
     config.videoPath    = videoPath;
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    writeConfig(config);
     console.log("Video wallpaper set to:", videoPath);
+
+    if (isLiveActive()) {
+        stopLiveWallpaper();
+        setTimeout(startLiveWallpaper, 800);
+    } else {
+        // A video wallpaper only plays in live mode — start it.
+        setLiveEnabled(true);
+        startLiveWallpaper();
+    }
+    buildTrayMenu();
     return videoPath;
+}
+
+function setVideoEnabled(enabled) {
+    const cfg = readConfig();
+    cfg.videoEnabled = enabled === true;
+    writeConfig(cfg);
+
+    if (isLiveActive() && cfg.videoEnabled && clockOnlyWallpaperActive) {
+        // Transition from native clock mode to the Electron video renderer
+        // only when video has actually been enabled.
+        clockOnlyWallpaperActive = false;
+        startLiveWallpaper().catch(e => console.error("Could not start video wallpaper:", e));
+    } else if (isLiveActive() && !cfg.videoEnabled && liveWindows.length > 0) {
+        // Drop the Electron renderer as soon as video is disabled.
+        stopLiveWallpaper();
+        setTimeout(() => startLiveWallpaper().catch(e => console.error("Could not start native wallpaper:", e)), 250);
+    } else if (isLiveActive()) {
+        refreshLiveWallpaper();
+    }
+    buildTrayMenu();
 }
 
 // ─── Live wallpaper data ──────────────────────────────────────────────────────
 function getLiveWallpaperData(sender = null) {
-    const fontsDir = getFontsDir();
 
     const allDisplays = getSortedDisplays();
     const virtualBounds = getVirtualBounds(allDisplays);
@@ -556,11 +577,7 @@ function getLiveWallpaperData(sender = null) {
             virtualBounds:   { x: 0, y: 0, width: targetDisplay.bounds.width, height: targetDisplay.bounds.height },
             display,
             displays: [display],
-            fonts: {
-                anurati:  path.join(fontsDir, "anurati.ttf"),
-                rajdhani: path.join(fontsDir, "Rajdhani-Bold.ttf"),
-                poppins:  path.join(fontsDir, "poppins.semibold.ttf")
-            }
+            fonts: getFontList()
         };
     }
 
@@ -579,11 +596,7 @@ function getLiveWallpaperData(sender = null) {
         backgroundPath: readBackgroundPath(),
         virtualBounds,
         displays,
-        fonts: {
-            anurati:  path.join(fontsDir, "anurati.ttf"),
-            rajdhani: path.join(fontsDir, "Rajdhani-Bold.ttf"),
-            poppins:  path.join(fontsDir, "poppins.semibold.ttf")
-        }
+        fonts: getFontList()
     };
 }
 
@@ -763,8 +776,13 @@ function createLiveWallpaperWindow(display) {
     win.on("restore", () => {
         console.log(`[win event] restore display=${win.liveDisplayId} — resetting attach flag`);
         win.isAttachedToDesktop = false;
+        sendLiveWallpaperVisibility(win, true);
         setTimeout(() => maintainLiveWallpaperWindow(win), 300);
     });
+
+    win.on("show", () => sendLiveWallpaperVisibility(win, true));
+    win.on("hide", () => sendLiveWallpaperVisibility(win, false));
+    win.on("minimize", () => sendLiveWallpaperVisibility(win, false));
 
     win.on("closed", () => {
         console.log("[win event] closed");
@@ -774,6 +792,11 @@ function createLiveWallpaperWindow(display) {
     });
 
     return win;
+}
+
+function sendLiveWallpaperVisibility(win, visible) {
+    if (!win || win.isDestroyed() || win.webContents.isLoading()) return;
+    win.webContents.send("live-visibility-changed", visible);
 }
 
 // ─── Live wallpaper – start / stop ───────────────────────────────────────────
@@ -921,10 +944,15 @@ function reattachLiveWallpaperWindows() {
 function openSettings() {
     if (settingsWindow) { settingsWindow.focus(); return; }
     settingsWindow = new BrowserWindow({
-        width: 520, height: 900, resizable: false,
-        title: "Wallpaper Settings",
+        width: 1120, height: 740,
+        minWidth: 940, minHeight: 620,
+        title: "Live Wallpaper",
+        backgroundColor: "#0b0b10",
+        autoHideMenuBar: true,
+        icon: path.join(__dirname, "icon.png"),
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
+    settingsWindow.setMenu(null);
     settingsWindow.loadFile("settings.html");
     settingsWindow.on("closed", () => { settingsWindow = null; });
 }
@@ -932,52 +960,20 @@ function openSettings() {
 // ─── Tray ─────────────────────────────────────────────────────────────────────
 function buildTrayMenu() {
     if (!tray || tray.isDestroyed()) return;
-    const isLive   = liveWindows.length > 0 || clockOnlyWallpaperActive;
+    const isLive   = isLiveActive();
     const config   = readConfig();
     const template = [
         {
-            label: "Change Background Image",
-            click: async () => {
-                await getImage();
-                if (isLive) refreshLiveWallpaper();
-                else await runWallpaperUpdate();
-            }
+            label: "Change Background Image…",
+            click: () => chooseBackgroundImage().catch(e => console.error(e))
         },
         {
             label: "Set Video Wallpaper…",
-            click: async () => {
-                const videoPath = await pickVideoWallpaper();
-                if (!videoPath) return;
-                if (isLive) {
-                    stopLiveWallpaper();
-                    setTimeout(startLiveWallpaper, 800);
-                } else {
-                    // A video wallpaper only plays in live mode — start it.
-                    setLiveEnabled(true);
-                    startLiveWallpaper();
-                }
-            }
+            click: () => chooseVideoWallpaper().catch(e => console.error(e))
         },
         {
             label: config.videoEnabled ? "Disable Video Wallpaper" : "Enable Video Wallpaper",
-            click: () => {
-                const cfg = readConfig();
-                cfg.videoEnabled = !cfg.videoEnabled;
-                fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
-                if (isLive && cfg.videoEnabled && clockOnlyWallpaperActive) {
-                    // Transition from native clock mode to the Electron video
-                    // renderer only when video has actually been enabled.
-                    clockOnlyWallpaperActive = false;
-                    startLiveWallpaper().catch(e => console.error("Could not start video wallpaper:", e));
-                } else if (isLive && !cfg.videoEnabled && liveWindows.length > 0) {
-                    // Drop the Electron renderer as soon as video is disabled.
-                    stopLiveWallpaper();
-                    setTimeout(() => startLiveWallpaper().catch(e => console.error("Could not start native wallpaper:", e)), 250);
-                } else if (isLive) {
-                    refreshLiveWallpaper();
-                }
-                buildTrayMenu();
-            }
+            click: () => setVideoEnabled(!readConfig().videoEnabled)
         },
         { type: "separator" },
         { label: "Settings",        click: () => openSettings() },
@@ -1068,24 +1064,6 @@ app.whenReady().then(async () => {
     tray.setToolTip("Live Wallpaper");
     buildTrayMenu();
     console.log("Tray created.");
-
-    const fontsDir = getFontsDir();
-
-    const anuratiPath  = path.join(fontsDir, "anurati.ttf");
-    const rajdhaniPath = path.join(fontsDir, "Rajdhani-Bold.ttf");
-    const poppinsPath  = path.join(fontsDir, "poppins.semibold.ttf");
-
-    console.log("Fonts dir:", fontsDir);
-    console.log("Anurati exists:",  fs.existsSync(anuratiPath));
-    console.log("Rajdhani exists:", fs.existsSync(rajdhaniPath));
-    console.log("Poppins exists:",  fs.existsSync(poppinsPath));
-
-    try {
-        registerFont(poppinsPath,  { family: "Poppins" });
-        registerFont(anuratiPath,  { family: "Anurati" });
-        registerFont(rajdhaniPath, { family: "Rajdhani" });
-        console.log("Fonts registered.");
-    } catch (e) { console.error("Font registration error:", e); }
 
     // Resume whichever mode was active last time the app ran.
     if (readConfig().liveEnabled) {
